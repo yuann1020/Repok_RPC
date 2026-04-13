@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String               @id @default(uuid()) @map("user_id")
+  fullName        String               @map("full_name")
+  email           String               @unique
+  passwordHash    String?              @map("password_hash")
+  phoneNumber     String?              @map("phone_number")
+  role            Role                 @default(CUSTOMER)
+  profileImageUrl String?              @map("profile_image_url")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  googleId        String?              @unique @map("google_id")
+  announcements   Announcement[]       @relation("AnnouncementCreator")
+  bookings        Booking[]
+  comments        Comment[]
+  resetTokens     PasswordResetToken[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model Announcement {
+  id              String           @id @default(uuid()) @map("announcement_id")
+  title           String
+  message         String
+  type            AnnouncementType @default(INFO)
+  isActive        Boolean          @default(true) @map("is_active")
+  startsAt        DateTime?        @map("starts_at")
+  endsAt          DateTime?        @map("ends_at")
+  createdByUserId String?          @map("created_by_user_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  imageUrls       String[]         @default([]) @map("image_urls")
+  createdBy       User?            @relation("AnnouncementCreator", fields: [createdByUserId], references: [id])
+  comments        Comment[]
+
+  @@index([isActive])
+  @@index([createdByUserId])
+  @@map("announcements")
+}
+
+model Comment {
+  id             String       @id @default(uuid()) @map("comment_id")
+  announcementId String       @map("announcement_id")
+  userId         String       @map("user_id")
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Court {
+  id             String              @id @default(uuid()) @map("court_id")
+  name           String
+  pricePerHour   Decimal             @map("price_per_hour") @db.Decimal(10, 2)
+  status         CourtStatus         @default(ACTIVE)
+  courtType      CourtType           @default(INDOOR) @map("court_type")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  category       CourtCategory       @default(STANDARD)
+  facilities     String[]            @default([])
+  bookingItems   BookingItem[]
+  availabilities CourtAvailability[]
+
+  @@map("courts")
+}
+
+model CourtAvailability {
+  id           String       @id @default(uuid()) @map("availability_id")
+  courtId      String       @map("court_id")
+  startTime    DateTime     @map("start_time")
+  endTime      DateTime     @map("end_time")
+  isAvailable  Boolean      @default(true) @map("is_available")
+  basePrice    Decimal?     @map("base_price") @db.Decimal(10, 2)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  bookingItems BookingItem?
+  court        Court        @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@unique([courtId, startTime, endTime])
+  @@index([courtId, startTime])
+  @@map("court_availabilities")
+}
+
+model Booking {
+  id               String        @id @default(uuid()) @map("booking_id")
+  userId           String        @map("user_id")
+  bookingReference String        @unique @map("booking_reference")
+  status           BookingStatus @default(PENDING)
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(10, 2)
+  paymentStatus    PaymentStatus @default(UNPAID) @map("payment_status")
+  bookedAt         DateTime      @default(now()) @map("booked_at")
+  cancelledAt      DateTime?     @map("cancelled_at")
+  notes            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  items            BookingItem[]
+  user             User          @relation(fields: [userId], references: [id])
+  payment          Payment?
+
+  @@index([userId, bookedAt])
+  @@map("bookings")
+}
+
+model BookingItem {
+  id             String            @id @default(uuid()) @map("booking_item_id")
+  bookingId      String            @map("booking_id")
+  courtId        String            @map("court_id")
+  availabilityId String            @unique @map("availability_id")
+  startTime      DateTime          @map("start_time")
+  endTime        DateTime          @map("end_time")
+  price          Decimal           @db.Decimal(10, 2)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  availability   CourtAvailability @relation(fields: [availabilityId], references: [id])
+  booking        Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  court          Court             @relation(fields: [courtId], references: [id])
+
+  @@index([bookingId])
+  @@map("booking_items")
+}
+
+model Payment {
+  id              String        @id @default(uuid()) @map("payment_id")
+  bookingId       String        @unique @map("booking_id")
+  paymentProvider String?       @map("payment_provider")
+  paymentIntentId String?       @unique @map("payment_intent_id")
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("MYR")
+  status          PaymentStatus @default(UNPAID)
+  paidAt          DateTime?     @map("paid_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  proofImageUrl   String?       @map("proof_image_url")
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum CourtStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum CourtType {
+  INDOOR
+  OUTDOOR
+}
+
+enum CourtCategory {
+  STANDARD
+  CHAMPIONSHIP
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+  PENDING_REVIEW
+}
+
+enum AnnouncementType {
+  INFO
+  MAINTENANCE
+  CLOSURE
+}
