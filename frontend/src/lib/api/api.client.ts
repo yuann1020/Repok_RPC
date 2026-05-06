@@ -1,8 +1,19 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth-store';
 
+const getApiBaseUrl = () => {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_API_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+
+  const fallbackUrl =
+    process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
+
+  return (configuredUrl || fallbackUrl).replace(/\/+$/, '');
+};
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

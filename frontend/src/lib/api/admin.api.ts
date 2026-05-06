@@ -1,5 +1,5 @@
 import { apiClient } from './api.client';
-import { Announcement, AnnouncementType } from './announcements.api';
+import { Announcement, AnnouncementType, normalizeAnnouncement, normalizeArrayResponse } from './announcements.api';
 import { Court } from './courts.api';
 
 // Safely excluding internal UUID constraints organically generating payloads
@@ -34,7 +34,7 @@ export const adminApi = {
 
   getAllAnnouncements: async (): Promise<AdminAnnouncement[]> => {
     const response = await apiClient.get('/admin/announcements');
-    return response.data;
+    return normalizeArrayResponse<AdminAnnouncement>(response.data).map(normalizeAnnouncement);
   },
 
   createAnnouncement: async (payload: CreateAnnouncementPayload): Promise<AdminAnnouncement> => {

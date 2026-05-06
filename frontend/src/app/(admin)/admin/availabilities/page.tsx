@@ -51,10 +51,12 @@ export default function AdminAvailabilitiesManager() {
 
   const { data: slots, isLoading: isSlotsLoading } = useQuery({
     queryKey: ['admin-availability', selectedCourtId, viewDate],
-    queryFn: () => availabilityApi.getAvailability(selectedCourtId, viewDate),
+    queryFn: () => availabilityApi.getAvailability(selectedCourtId, viewDate, { includeUnavailable: true }),
     enabled: !!selectedCourtId && !!viewDate,
   });
 
+  const courtList = Array.isArray(courts) ? courts : [];
+  const selectedCourt = courtList.find((court) => court.id === selectedCourtId);
   const totalSlots     = slots?.length ?? 0;
   const availableSlots = slots?.filter((s: any) => s.isAvailable).length ?? 0;
   const blockedSlots   = totalSlots - availableSlots;
@@ -78,42 +80,44 @@ export default function AdminAvailabilitiesManager() {
       {/* ── Page Header ─────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 pb-6 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-2 uppercase italic">
-            Availability <span className="text-green-500">Manager</span>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-2">
+            Court Availability
           </h1>
           <p className="text-slate-500 dark:text-slate-400 font-medium">
-            Manage your court availability and block specific time slots.
+            Select a court and date, then block or reopen individual booking slots.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <span className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em] shrink-0">
-            Choose Court
+            Step 1: Court
           </span>
           <select
             value={selectedCourtId}
             onChange={(e) => setSelectedCourtId(e.target.value)}
             disabled={isCourtsLoading}
-            className="input-premium px-4 py-2.5 text-sm font-bold min-w-[210px] cursor-pointer"
+            className="input-premium min-w-full cursor-pointer px-4 py-2.5 text-sm font-bold sm:min-w-[240px]"
           >
             <option value="" disabled>Select court...</option>
-            {courts?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {courtList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
       </div>
 
       {/* ── Content ─────────────────────────── */}
       {!selectedCourtId ? (
-        <div className="flex flex-col items-center justify-center p-20 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/30">
-          <span className="text-4xl mb-4">🎾</span>
-          <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase">No Court Selected</h3>
-          <p className="text-slate-500 dark:text-slate-400 mt-2">Pick a court from the list above to manage its slots.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-800 bg-slate-900/30 p-10 text-center sm:p-16">
+          <h3 className="text-xl font-black text-white">Choose a court to begin</h3>
+          <p className="mt-2 max-w-md text-sm text-slate-400">
+            After selecting a court, choose the day and tap any slot to block or reopen it.
+          </p>
         </div>
       ) : (
-        <div className="card-premium p-8 space-y-8 h-full flex flex-col">
+        <div className="card-premium flex h-full flex-col space-y-8 p-5 sm:p-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
             <div>
-              <SectionHeader accent="#4ade80" label="Choose Date" />
+              <SectionHeader accent="#4ade80" label="Step 2: Date" />
+              <h2 className="mt-2 text-xl font-black text-white">{selectedCourt?.name || 'Selected court'}</h2>
               <div className="mt-4 flex flex-wrap items-center gap-4">
                 <input
                   type="date"
@@ -136,39 +140,47 @@ export default function AdminAvailabilitiesManager() {
             </div>
           ) : !slots || slots.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-slate-500 font-medium">No slots found for this date. Check system configuration.</p>
+              <p className="text-slate-500 font-medium">No slots were found for this date. Try another date or refresh after slot generation.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {slots.map((slot: any) => (
-                <div
-                  key={slot.id}
-                  className={`flex flex-col p-5 rounded-2xl border transition-all ${
-                    slot.isAvailable
-                      ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm'
-                      : 'bg-red-500/5 border-red-500/20'
-                  }`}
-                >
-                  <div className="flex justify-between items-center mb-6">
-                    <span className={`font-mono font-black text-lg ${slot.isAvailable ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500 line-through'}`}>
-                      {formatTimeLabel(slot.startTime)}
-                    </span>
-                    <span className={`h-2.5 w-2.5 rounded-full ${slot.isAvailable ? 'bg-green-500 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-red-500'}`} />
-                  </div>
-
-                  <button
-                    disabled={pendingToggleId === slot.id}
-                    onClick={() => toggleMutation.mutate({ id: slot.id, isAvailable: !slot.isAvailable })}
-                    className={`w-full py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+            <div className="space-y-4">
+              <SectionHeader accent="#fbbf24" label="Step 3: Manage Slots" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                {slots.map((slot: any) => (
+                  <div
+                    key={slot.id}
+                    className={`flex flex-col rounded-2xl border p-5 transition-all ${
                       slot.isAvailable
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 hover:bg-red-500/10'
-                        : 'bg-green-500 text-slate-950 hover:bg-green-400'
+                        ? 'border-slate-800 bg-slate-900 shadow-sm'
+                        : 'border-red-500/20 bg-red-500/5'
                     }`}
                   >
-                    {pendingToggleId === slot.id ? '...' : (slot.isAvailable ? 'BLOCK' : 'UNBLOCK')}
-                  </button>
-                </div>
-              ))}
+                    <div className="mb-5 flex items-center justify-between gap-3">
+                      <div>
+                        <span className={`font-mono text-lg font-black ${slot.isAvailable ? 'text-white' : 'text-slate-500 line-through'}`}>
+                          {formatTimeLabel(slot.startTime)}
+                        </span>
+                        <p className={`mt-1 text-[10px] font-black uppercase tracking-[0.16em] ${slot.isAvailable ? 'text-green-400' : 'text-red-400'}`}>
+                          {slot.isAvailable ? 'Open' : 'Blocked'}
+                        </p>
+                      </div>
+                      <span className={`h-2.5 w-2.5 rounded-full ${slot.isAvailable ? 'bg-green-500 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-red-500'}`} />
+                    </div>
+
+                    <button
+                      disabled={pendingToggleId === slot.id}
+                      onClick={() => toggleMutation.mutate({ id: slot.id, isAvailable: !slot.isAvailable })}
+                      className={`w-full rounded-xl py-3 text-[10px] font-black uppercase tracking-widest transition-all ${
+                        slot.isAvailable
+                          ? 'bg-slate-800 text-slate-300 hover:bg-red-500/10 hover:text-red-400'
+                          : 'bg-green-500 text-slate-950 hover:bg-green-400'
+                      }`}
+                    >
+                      {pendingToggleId === slot.id ? 'Saving...' : (slot.isAvailable ? 'Block Slot' : 'Open Slot')}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

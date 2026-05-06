@@ -10,9 +10,13 @@ export interface AvailabilitySlot {
 }
 
 export const availabilityApi = {
-  getAvailability: async (courtId: string, date: string): Promise<AvailabilitySlot[]> => {
+  getAvailability: async (
+    courtId: string,
+    date: string,
+    options?: { includeUnavailable?: boolean },
+  ): Promise<AvailabilitySlot[]> => {
     const response = await apiClient.get('/availability', {
-      params: { courtId, date }
+      params: { courtId, date, includeUnavailable: options?.includeUnavailable }
     });
     return response.data;
   },

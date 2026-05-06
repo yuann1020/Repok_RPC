@@ -1,22 +1,30 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { announcementsApi, Announcement } from '@/lib/api/announcements.api';
 import { MegaphoneIcon, XMarkIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 export function AnnouncementBanner() {
-  const { data: announcements, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['active-announcements'],
     queryFn: announcementsApi.getActiveAnnouncements,
     refetchInterval: 60000, // Refetch every minute
+    retry: 1,
   });
 
+  const announcements = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const [visibleIdx, setVisibleIdx] = useState(0);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    if (!announcements || announcements.length <= 1) return;
+    if (visibleIdx >= announcements.length) {
+      setVisibleIdx(0);
+    }
+  }, [announcements.length, visibleIdx]);
+
+  useEffect(() => {
+    if (announcements.length <= 1) return;
 
     const interval = setInterval(() => {
       setVisibleIdx((curr) => (curr + 1) % announcements.length);
@@ -25,11 +33,13 @@ export function AnnouncementBanner() {
     return () => clearInterval(interval);
   }, [announcements]);
 
-  if (isLoading || !announcements || announcements.length === 0 || isDismissed) {
+  if (isLoading || announcements.length === 0 || isDismissed) {
     return null;
   }
 
   const current = announcements[visibleIdx];
+
+  if (!current) return null;
 
   const bannerStyles = (type: Announcement['type']) => {
     switch (type) {

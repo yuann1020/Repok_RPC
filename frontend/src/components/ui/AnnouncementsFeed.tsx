@@ -61,6 +61,7 @@ function CommentSection({ announcementId, commentCount }: { announcementId: stri
     queryKey: ['announcement-comments', announcementId],
     queryFn: () => announcementsApi.getComments(announcementId),
     enabled: isExpanded,
+    retry: 1,
   });
 
   const commentMutation = useMutation({
@@ -78,6 +79,8 @@ function CommentSection({ announcementId, commentCount }: { announcementId: stri
     commentMutation.mutate(commentText);
   };
 
+  const commentsList = Array.isArray(comments) ? comments : [];
+
   return (
     <div className="mt-6 pt-4 border-t border-slate-800">
        <button 
@@ -93,10 +96,10 @@ function CommentSection({ announcementId, commentCount }: { announcementId: stri
            <div className="space-y-3">
              {isLoading ? (
                <div className="text-[10px] text-slate-600 animate-pulse">Loading discussion...</div>
-             ) : comments?.length === 0 ? (
+             ) : commentsList.length === 0 ? (
                <div className="text-[10px] text-slate-600 italic">No comments yet. Start the conversation.</div>
              ) : (
-               comments?.map((c: any) => (
+               commentsList.map((c: any) => (
                  <div key={c.id} className="flex gap-3">
                     <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[9px] font-black text-slate-500 overflow-hidden shrink-0">
                       {c.user?.fullName?.charAt(0) || '?'}
@@ -142,16 +145,19 @@ export function AnnouncementsFeed({ variant }: { variant: Variant }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['active-announcements'],
     queryFn: announcementsApi.getActiveAnnouncements,
+    retry: 1,
   });
 
-  if (isLoading || isError || !data?.length) {
+  const announcements = Array.isArray(data) ? data : [];
+
+  if (isLoading || isError || announcements.length === 0) {
     return null;
   }
 
   if (variant === 'banner') {
     return (
       <div className="mb-6 space-y-3">
-        {data.map((announcement) => {
+        {announcements.map((announcement) => {
           const styles = getTypeStyles(announcement.type);
 
           return (
@@ -227,7 +233,7 @@ export function AnnouncementsFeed({ variant }: { variant: Variant }) {
         </div>
 
         <div className="grid gap-6">
-          {data.map((announcement) => {
+          {announcements.map((announcement) => {
             const styles = getTypeStyles(announcement.type);
 
             return (

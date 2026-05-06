@@ -18,6 +18,7 @@ import { OAuth2Client } from 'google-auth-library';
 @Injectable()
 export class AuthService {
   private googleClient: OAuth2Client;
+  private googleClientId?: string;
 
   constructor(
     private prisma: PrismaService,
@@ -25,9 +26,8 @@ export class AuthService {
     private emailService: EmailService,
     private configService: ConfigService,
   ) {
-    this.googleClient = new OAuth2Client(
-      this.configService.get('GOOGLE_CLIENT_ID'),
-    );
+    this.googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID')?.trim();
+    this.googleClient = new OAuth2Client(this.googleClientId);
   }
 
   private normalizeEmail(email: string) {
@@ -187,9 +187,19 @@ export class AuthService {
 
   async googleSignIn(idToken: string) {
     try {
+      if (!this.googleClientId) {
+        throw new BadRequestException(
+          'Google Sign-In is not configured. Set GOOGLE_CLIENT_ID on the backend.',
+        );
+      }
+
+      if (!idToken) {
+        throw new BadRequestException('Missing Google credential.');
+      }
+
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        audience: this.configService.get('GOOGLE_CLIENT_ID'),
+        audience: this.googleClientId,
       });
 
       const payload = ticket.getPayload();
@@ -247,6 +257,13 @@ export class AuthService {
         },
       };
     } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
       throw new UnauthorizedException('Google authentication failed');
     }
   }

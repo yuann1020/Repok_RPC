@@ -14,7 +14,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     hydrate();
   }, [hydrate]);
 
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
 
   const content = (
     <QueryClientProvider client={queryClient}>

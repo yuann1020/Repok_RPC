@@ -36,12 +36,25 @@ export default function AdminCourtsManager() {
     onError: (err: any) => setErrorMsg(err.response?.data?.message || 'Failed to update court.')
   });
 
+  const startCreate = () => {
+    setErrorMsg('');
+    setActiveCourt({
+      name: '',
+      category: 'STANDARD',
+      pricePerHour: '',
+      status: 'ACTIVE',
+    });
+    setIsEditing(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     
     const payload = {
       ...activeCourt,
+      category: activeCourt.category || 'STANDARD',
+      status: activeCourt.status || 'ACTIVE',
       pricePerHour: Number(activeCourt.pricePerHour) || 0,
       courtType: 'INDOOR', // Default kept for backend compat
       facilities: [],      // Default kept for backend compat
@@ -55,6 +68,7 @@ export default function AdminCourtsManager() {
   };
 
   const handleEdit = (court: Court) => {
+    setErrorMsg('');
     setActiveCourt({ ...court });
     setIsEditing(true);
   };
@@ -66,19 +80,39 @@ export default function AdminCourtsManager() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Master Courts</h1>
-          <p className="text-slate-400">Manage your courts, update pricing, and change availability status.</p>
+          <p className="text-slate-400">Rename courts, set hourly pricing, and control whether each court can be booked.</p>
         </div>
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={startCreate}
+            className="inline-flex items-center justify-center rounded-xl bg-green-400 px-5 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-950 shadow-[0_0_18px_rgba(74,222,128,0.22)] transition hover:bg-green-300"
+          >
+            Add Court
+          </button>
+        )}
       </div>
 
       {/* 2. Court Form Modal */}
       {isEditing && (
         <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl relative backdrop-blur-3xl">
           <button 
-             onClick={() => setIsEditing(false)}
+             onClick={() => {
+               setIsEditing(false);
+               setActiveCourt({});
+               setErrorMsg('');
+             }}
              className="absolute top-6 right-6 text-slate-500 hover:text-slate-300 font-bold tracking-widest text-xs uppercase"
-          >✕ Close</button>
+          >
+            Close
+          </button>
           
-          <h2 className="text-xl font-bold text-white mb-6 uppercase tracking-wider">Edit Court Details</h2>
+          <h2 className="text-xl font-bold text-white mb-2 uppercase tracking-wider">
+            {activeCourt.id ? 'Edit Court Details' : 'Add Court'}
+          </h2>
+          <p className="mb-6 text-sm text-slate-400">
+            Only the details staff need day to day are shown here.
+          </p>
           
           {errorMsg && (
              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-xs font-bold uppercase tracking-widest">
@@ -98,7 +132,7 @@ export default function AdminCourtsManager() {
              </div>
 
              <div className="flex flex-col gap-1">
-               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</label>
+               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Court Category</label>
                <select value={activeCourt.category || 'STANDARD'} onChange={(e) => setActiveCourt({...activeCourt, category: e.target.value as any})} className="bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-green-500 transition-colors">
                  <option value="STANDARD">Standard</option>
                  <option value="CHAMPIONSHIP">Championship</option>
@@ -106,16 +140,16 @@ export default function AdminCourtsManager() {
              </div>
 
              <div className="flex flex-col gap-1">
-               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</label>
+               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Booking Status</label>
                <select value={activeCourt.status || 'ACTIVE'} onChange={(e) => setActiveCourt({...activeCourt, status: e.target.value as any})} className="bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-green-500 transition-colors">
-                 <option value="ACTIVE">Active</option>
-                 <option value="INACTIVE">Inactive</option>
-                 <option value="MAINTENANCE">Maintenance</option>
+                 <option value="ACTIVE">Bookable</option>
+                 <option value="INACTIVE">Hidden from booking</option>
+                 <option value="MAINTENANCE">Temporarily unavailable</option>
                </select>
              </div>
 
              <div className="md:col-span-2 pt-4">
-                <button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="bg-green-400 hover:bg-green-300 text-slate-900 font-bold px-8 py-3 rounded-lg tracking-widest text-xs uppercase transition-all shadow-[0_0_15px_rgba(7ade80,0.3)] disabled:opacity-50">
+                <button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="bg-green-400 hover:bg-green-300 text-slate-900 font-bold px-8 py-3 rounded-lg tracking-widest text-xs uppercase transition-all shadow-[0_0_15px_rgba(74,222,128,0.3)] disabled:opacity-50">
                    {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save Court'}
                 </button>
              </div>
@@ -125,14 +159,14 @@ export default function AdminCourtsManager() {
 
       {/* 3. Courts Table */}
       {!isEditing && (
-        <div className="bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-           <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto bg-slate-900/40 border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+           <table className="w-full min-w-[720px] text-left border-collapse">
              <thead>
                <tr className="bg-slate-950/50 text-slate-400 text-[10px] uppercase tracking-widest font-bold border-b border-white/5">
                  <th className="p-4 pl-6">Court Info</th>
                  <th className="p-4">Category</th>
                  <th className="p-4">Price</th>
-                 <th className="p-4">Status</th>
+                 <th className="p-4">Booking Status</th>
                  <th className="p-4 text-right pr-6">Actions</th>
                </tr>
              </thead>
@@ -140,7 +174,7 @@ export default function AdminCourtsManager() {
                {isLoading ? (
                  <tr><td colSpan={5} className="p-6 text-center text-slate-500">Loading courts...</td></tr>
                ) : courts?.length === 0 ? (
-                 <tr><td colSpan={5} className="p-10 text-center text-slate-500 border-dashed border-2 border-slate-800 m-4 rounded-xl">No courts found. Create your first court!</td></tr>
+                 <tr><td colSpan={5} className="p-10 text-center text-slate-500">No courts found. Add your first court to start taking bookings.</td></tr>
                ) : (
                  courts?.map((court) => (
                    <tr key={court.id} className="hover:bg-white/5 transition-colors">
@@ -150,13 +184,19 @@ export default function AdminCourtsManager() {
                      <td className="p-4 text-xs font-mono">
                        <span className={`px-2 py-1 rounded inline-block bg-slate-950 border border-slate-700 mr-2 ${court.category === 'CHAMPIONSHIP' ? 'text-yellow-400 border-yellow-500/30' : 'text-green-400 border-green-500/30'}`}>{court.category}</span>
                      </td>
-                     <td className="p-4 font-black text-slate-200 tracking-wide">RM {parseFloat(court.pricePerHour).toFixed(0)}</td>
+                     <td className="p-4 font-black text-slate-200 tracking-wide">RM {Number(court.pricePerHour).toFixed(2)}</td>
                      <td className="p-4">
                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 border rounded-full ${
                          court.status === 'ACTIVE' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
                          court.status === 'MAINTENANCE' ? 'bg-red-500/10 text-red-500 border-red-500/30' :
                          'bg-slate-800 text-slate-400 border-slate-700'
-                       }`}>{court.status}</span>
+                       }`}>
+                         {court.status === 'ACTIVE'
+                           ? 'Bookable'
+                           : court.status === 'MAINTENANCE'
+                             ? 'Unavailable'
+                             : 'Hidden'}
+                       </span>
                      </td>
                      <td className="p-4 text-right pr-6">
                         <button onClick={() => handleEdit(court)} className="text-[10px] uppercase font-bold tracking-widest text-slate-500 hover:text-green-400 transition-colors bg-slate-950 border border-slate-800 hover:border-green-500/30 px-3 py-1.5 rounded">

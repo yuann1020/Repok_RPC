@@ -17,7 +17,7 @@ export function CourtCard({ court }: { court: Court }) {
         }`}
       >
         {/* Visual Header / Image Placeholder */}
-        <div className="h-48 relative overflow-hidden bg-slate-100 dark:bg-slate-800">
+        <div className="h-44 sm:h-48 relative overflow-hidden bg-slate-100 dark:bg-slate-800">
           {court.imageUrl ? (
             <img src={court.imageUrl} alt={court.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
           ) : (
@@ -32,7 +32,7 @@ export function CourtCard({ court }: { court: Court }) {
             </div>
           )}
           
-          <div className="absolute top-4 left-4 flex gap-2">
+          <div className="absolute top-3 left-3 right-3 flex flex-wrap gap-2 sm:top-4 sm:left-4 sm:right-auto">
             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border backdrop-blur-md ${
               court.status === 'ACTIVE' 
                 ? 'bg-green-500/10 text-green-500 border-green-500/20' 
@@ -51,19 +51,19 @@ export function CourtCard({ court }: { court: Court }) {
         </div>
 
         {/* Content */}
-        <div className="p-6 flex flex-col flex-1">
-          <div className="flex justify-between items-start gap-4">
+        <div className="p-5 sm:p-6 flex flex-col flex-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start sm:gap-4">
             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-green-500 transition-colors">
               {court.name}
             </h3>
-            <span className="text-sm font-black text-green-500 italic">RM {court.pricePerHour}/hr</span>
+            <span className="shrink-0 text-sm font-black text-green-500 italic">RM {court.pricePerHour}/hr</span>
           </div>
           
           <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm font-medium line-clamp-2 leading-relaxed">
             Experience premium Pickleball on our professional {court.category.toLowerCase()} courts.
           </p>
 
-          <div className="mt-auto pt-6 flex items-center justify-between">
+          <div className="mt-auto pt-6 flex items-center justify-between gap-4">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
               View Schedule
             </span>

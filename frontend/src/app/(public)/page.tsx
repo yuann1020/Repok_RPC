@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { AnnouncementsFeed } from '@/components/ui/AnnouncementsFeed';
+import { CustomerHeader } from '@/components/shared/CustomerHeader';
 import { useAuthStore } from '@/store/auth-store';
 
 const FEATURES = [
@@ -51,6 +52,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col min-h-screen text-white relative overflow-hidden">
+      <CustomerHeader />
       <AnnouncementsFeed variant="section" />
 
       {/* ── Hero ──────────────────────────────────── */}

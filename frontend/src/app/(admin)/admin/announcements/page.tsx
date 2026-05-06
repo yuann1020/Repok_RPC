@@ -63,10 +63,14 @@ export default function AdminAnnouncementsPage() {
     }));
   };
 
-  const { data: announcements, isLoading, isError } = useQuery({
+  const { data: announcementsData, isLoading, isError } = useQuery({
     queryKey: ['admin-announcements'],
     queryFn: adminApi.getAllAnnouncements,
   });
+
+  const announcements = Array.isArray(announcementsData) ? announcementsData : [];
+  const activeCount = announcements.filter((announcement) => announcement.isActive).length;
+  const inactiveCount = announcements.length - activeCount;
 
   const createMutation = useMutation({
     mutationFn: adminApi.createAnnouncement,
@@ -149,13 +153,21 @@ export default function AdminAnnouncementsPage() {
     setFeedback('');
   };
 
+  const toggleActive = (announcement: AdminAnnouncement) => {
+    setFeedback('');
+    updateMutation.mutate({
+      id: announcement.id,
+      payload: { isActive: !announcement.isActive },
+    });
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <div className="border-b border-slate-800 pb-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-green-400">Admin · Announcements</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-white">Broadcast operational updates</h1>
+        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-green-400">Admin / Announcements</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-white">Post club announcements</h1>
         <p className="mt-2 max-w-2xl text-sm font-medium text-slate-500">
-          Publish notices and updates with multiple photos. Operational updates maintain clarity for all players.
+          Active announcements are shown to customers. Inactive announcements stay saved for later.
         </p>
       </div>
 
@@ -177,20 +189,23 @@ export default function AdminAnnouncementsPage() {
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Title</label>
               <input
+                required
                 value={form.title}
                 onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-medium text-slate-100 outline-none transition focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                placeholder="Operational Update"
+                placeholder="e.g. Court 2 closed tonight"
               />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Message</label>
               <textarea
+                required
                 value={form.message}
                 onChange={(e) => setForm((current) => ({ ...current, message: e.target.value }))}
                 rows={4}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-medium text-slate-100 outline-none transition focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                placeholder="Write the short message customers should see."
               />
             </div>
 
@@ -221,7 +236,7 @@ export default function AdminAnnouncementsPage() {
                       : 'border-slate-700 bg-slate-950/70 text-slate-400'
                   }`}
                 >
-                  <span>{form.isActive ? 'Active' : 'Inactive'}</span>
+                  <span>{form.isActive ? 'Visible to customers' : 'Save as inactive'}</span>
                 </button>
               </div>
             </div>
@@ -282,9 +297,26 @@ export default function AdminAnnouncementsPage() {
         </section>
 
         <section className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-white">Announcement list</h2>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {activeCount} active / {inactiveCount} inactive
+              </p>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="text-center text-slate-500 py-20">Loading...</div>
-          ) : announcements?.map((announcement) => (
+          ) : isError ? (
+            <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-6 text-sm font-semibold text-red-300">
+              Announcements could not be loaded.
+            </div>
+          ) : announcements.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/30 p-10 text-center text-sm font-semibold text-slate-500">
+              No announcements yet. Post the first club update from the form.
+            </div>
+          ) : announcements.map((announcement) => (
             <article
               key={announcement.id}
               className="rounded-3xl border overflow-hidden p-6"
@@ -322,6 +354,14 @@ export default function AdminAnnouncementsPage() {
                 <div className="flex justify-end gap-2 border-t border-slate-800 pt-4">
                   <button
                     type="button"
+                    onClick={() => toggleActive(announcement)}
+                    disabled={isSubmitting}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-green-300 disabled:opacity-50"
+                  >
+                    {announcement.isActive ? 'Make Inactive' : 'Make Active'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => startEditing(announcement)}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white"
                   >
@@ -330,7 +370,7 @@ export default function AdminAnnouncementsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm('Delete this?')) deleteMutation.mutate(announcement.id);
+                      if (window.confirm('Delete this announcement?')) deleteMutation.mutate(announcement.id);
                     }}
                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300"
                   >

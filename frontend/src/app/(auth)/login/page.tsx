@@ -110,7 +110,7 @@ export default function LoginPage() {
     loginMutation.mutate();
   };
 
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
 
   return (
     <div className="flex flex-col gap-6">
@@ -212,7 +212,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {googleClientId && (
+      {googleClientId ? (
         <>
           <div className="relative py-2">
             <div className="absolute inset-0 flex items-center" aria-hidden="true">
@@ -240,6 +240,10 @@ export default function LoginPage() {
             />
           </div>
         </>
+      ) : (
+        <p className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+          Google Sign-In is unavailable. Password login is still available.
+        </p>
       )}
 
       <p className="text-center text-[11px] text-slate-500 font-bold uppercase tracking-widest">
