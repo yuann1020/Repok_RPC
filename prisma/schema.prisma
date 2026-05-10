@@ -109,23 +109,25 @@ model CourtAvailability {
 }
 
 model Booking {
-  id                 String              @id @default(uuid()) @map("booking_id")
-  userId             String              @map("user_id")
-  bookingReference   String              @unique @map("booking_reference")
-  status             BookingStatus       @default(PENDING)
-  totalAmount        Decimal             @map("total_amount") @db.Decimal(10, 2)
-  paymentStatus      PaymentStatus       @default(UNPAID) @map("payment_status")
-  bookedAt           DateTime            @default(now()) @map("booked_at")
-  expiresAt          DateTime?           @map("expires_at")
-  expiredAt          DateTime?           @map("expired_at")
-  cancelledAt        DateTime?           @map("cancelled_at")
-  notes              String?
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  items              BookingItem[]
-  user               User                @relation(fields: [userId], references: [id])
-  payment            Payment?
-  walletTransactions WalletTransaction[]
+  id                         String              @id @default(uuid()) @map("booking_id")
+  userId                     String              @map("user_id")
+  bookingReference           String              @unique @map("booking_reference")
+  status                     BookingStatus       @default(PENDING)
+  totalAmount                Decimal             @map("total_amount") @db.Decimal(10, 2)
+  paymentStatus              PaymentStatus       @default(UNPAID) @map("payment_status")
+  bookedAt                   DateTime            @default(now()) @map("booked_at")
+  expiresAt                  DateTime?           @map("expires_at")
+  expiredAt                  DateTime?           @map("expired_at")
+  cancelledAt                DateTime?           @map("cancelled_at")
+  confirmationEmailSentAt    DateTime?           @map("confirmation_email_sent_at")
+  confirmationEmailLastError String?             @map("confirmation_email_last_error")
+  notes                      String?
+  createdAt                  DateTime            @default(now()) @map("created_at")
+  updatedAt                  DateTime            @updatedAt @map("updated_at")
+  items                      BookingItem[]
+  user                       User                @relation(fields: [userId], references: [id])
+  payment                    Payment?
+  walletTransactions         WalletTransaction[]
 
   @@index([userId, bookedAt])
   @@index([status, expiresAt])

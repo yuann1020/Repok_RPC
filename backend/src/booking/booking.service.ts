@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,15 +16,20 @@ import {
   WalletTransactionType,
 } from '@prisma/client';
 
+import { EmailService } from '../email/email.service';
+
 const DEFAULT_BOOKING_HOLD_MINUTES = 10;
 const BOOKING_EXPIRED_MESSAGE =
   'This booking has expired. Please select slots again.';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async createBooking(userId: string, createDto: CreateBookingDto) {
@@ -230,7 +236,7 @@ export class BookingService {
     const amount = new Prisma.Decimal(booking.totalAmount);
     const now = new Date();
 
-    return this.prisma.$transaction(async (prisma) => {
+    const result = await this.prisma.$transaction(async (prisma) => {
       const wallet = await prisma.wallet.upsert({
         where: { userId },
         create: { userId, balance: new Prisma.Decimal(0), currency: 'MYR' },
@@ -312,10 +318,11 @@ export class BookingService {
       });
 
       return {
-        booking: await prisma.booking.findUnique({
+        booking: await prisma.booking.findUniqueOrThrow({
           where: { id },
           include: {
             items: { include: { court: true } },
+            user: true,
           },
         }),
         payment,
@@ -328,6 +335,40 @@ export class BookingService {
         },
       };
     });
+
+    if (!result.booking.confirmationEmailSentAt && result.booking.user) {
+      try {
+        const firstItem = result.booking.items[0];
+        const lastItem = result.booking.items[result.booking.items.length - 1];
+
+        await this.emailService.sendBookingConfirmationEmail({
+          email: result.booking.user.email,
+          customerName: result.booking.user.fullName || 'Customer',
+          bookingReference: result.booking.bookingReference,
+          courtName: firstItem?.court?.name || 'Pickleball Court',
+          bookingDate: firstItem?.startTime.toISOString().split('T')[0] || 'TBD',
+          startTime: firstItem?.startTime.toISOString() || 'TBD',
+          endTime: lastItem?.endTime.toISOString() || 'TBD',
+          totalAmount: Number(result.booking.totalAmount).toFixed(2),
+          paymentMethod: 'Wallet Credits',
+          bookingId: result.booking.id,
+        });
+
+        await this.prisma.booking.update({
+          where: { id: result.booking.id },
+          data: { confirmationEmailSentAt: new Date() },
+        });
+      } catch (error) {
+        this.logger.error(`Failed to send confirmation email for booking ${result.booking.id}`, error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        await this.prisma.booking.update({
+          where: { id: result.booking.id },
+          data: { confirmationEmailLastError: errorMessage },
+        });
+      }
+    }
+
+    return result;
   }
 
   async expireBookingIfNeeded(id: string, userId?: string) {

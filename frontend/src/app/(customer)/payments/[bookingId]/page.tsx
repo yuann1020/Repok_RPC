@@ -392,19 +392,21 @@ export default function PaymentGatewayPage() {
                     <h3 className="text-lg font-bold uppercase tracking-wider text-white">
                       Scan and Pay
                     </h3>
+                    <p className="mt-2 text-sm text-slate-400">Scan this QR code to make payment manually.</p>
                     <div className="relative mx-auto my-5 flex h-56 w-56 items-center justify-center overflow-hidden rounded-xl border-4 border-slate-200 bg-white p-4">
                       <img
-                        src="/tng-qr.jpg"
-                        alt="TNG QR Code"
+                        src="/payment/manual-qr.png"
+                        alt="Manual Payment QR Code"
                         className="h-full w-full object-contain"
                         onError={(event) => {
                           event.currentTarget.style.display = 'none';
                         }}
                       />
                       <span className="absolute inset-4 -z-10 flex items-center justify-center rounded-lg bg-slate-100 p-4 text-center text-sm font-bold text-slate-500">
-                        Add tng-qr.jpg to the public directory.
+                        Add manual-qr.png to the public/payment directory.
                       </span>
                     </div>
+                    <p className="text-sm font-bold text-white mb-2">Repok Pickleball Club</p>
                     <p className="text-sm text-slate-400">
                       Pay exactly{' '}
                       <span className="font-bold text-green-400">
@@ -412,6 +414,16 @@ export default function PaymentGatewayPage() {
                       </span>
                       .
                     </p>
+                    <div className="mt-4 text-left text-xs text-slate-400 space-y-1">
+                      <p>Instructions:</p>
+                      <ol className="list-decimal pl-4 space-y-1">
+                        <li>Scan QR code</li>
+                        <li>Complete transfer</li>
+                        <li>Upload payment proof</li>
+                        <li>Wait for admin approval</li>
+                      </ol>
+                      <p className="mt-2 pt-2 border-t border-slate-800 text-amber-300">Please upload a screenshot or receipt after payment.</p>
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-center">

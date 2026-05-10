@@ -10,7 +10,10 @@ import { AdminBookingService } from './services/admin-booking.service';
 import { AdminPaymentService } from './services/admin-payment.service';
 import { AdminUserService } from './services/admin-user.service';
 
+import { EmailModule } from '../email/email.module';
+
 @Module({
+  imports: [EmailModule],
   controllers: [
     AdminAnnouncementController,
     AdminCourtController,

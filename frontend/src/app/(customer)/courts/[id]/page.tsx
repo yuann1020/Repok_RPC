@@ -116,13 +116,7 @@ export default function CourtDetailPage() {
                    {court.category}
                  </span>
                </div>
-               
-               <div className="flex flex-wrap gap-2 mt-4">
-                 <span className="text-sm font-semibold tracking-wide text-slate-400 uppercase">Facilities:</span>
-                 {court.facilities.map((fac, idx) => (
-                    <span key={idx} className="text-xs px-2 py-1 bg-slate-950 text-slate-300 border border-slate-800 rounded">{fac}</span>
-                 ))}
-               </div>
+
              </div>
 
              <div className="text-right bg-slate-950 px-6 py-4 rounded-xl border border-slate-800">
