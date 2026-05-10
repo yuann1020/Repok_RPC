@@ -39,4 +39,9 @@ export class BookingController {
   async cancelBooking(@Request() req: any, @Param('id') id: string) {
     return this.bookingService.cancelBooking(req.user.userId, id);
   }
+
+  @Post(':id/pay-with-wallet')
+  async payWithWallet(@Request() req: any, @Param('id') id: string) {
+    return this.bookingService.payWithWallet(req.user.userId, id);
+  }
 }

@@ -7,12 +7,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
+import { BookingService } from '../booking/booking.service';
 
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookingService: BookingService,
+  ) {}
 
   async getAvailability(query: QueryAvailabilityDto) {
+    await this.bookingService.expireUnpaidBookings();
+
     const { courtId, date, includeUnavailable } = query;
     const where: any = {};
 

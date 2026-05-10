@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../backend/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -8,20 +9,23 @@ datasource db {
 }
 
 model User {
-  id              String               @id @default(uuid()) @map("user_id")
-  fullName        String               @map("full_name")
-  email           String               @unique
-  passwordHash    String?              @map("password_hash")
-  phoneNumber     String?              @map("phone_number")
-  role            Role                 @default(CUSTOMER)
-  profileImageUrl String?              @map("profile_image_url")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-  googleId        String?              @unique @map("google_id")
-  announcements   Announcement[]       @relation("AnnouncementCreator")
-  bookings        Booking[]
-  comments        Comment[]
-  resetTokens     PasswordResetToken[]
+  id                 String               @id @default(uuid()) @map("user_id")
+  fullName           String               @map("full_name")
+  email              String               @unique
+  passwordHash       String?              @map("password_hash")
+  phoneNumber        String?              @map("phone_number")
+  role               Role                 @default(CUSTOMER)
+  profileImageUrl    String?              @map("profile_image_url")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  googleId           String?              @unique @map("google_id")
+  announcements      Announcement[]       @relation("AnnouncementCreator")
+  bookings           Booking[]
+  comments           Comment[]
+  resetTokens        PasswordResetToken[]
+  wallet             Wallet?
+  walletTransactions WalletTransaction[]
+  topUpOrders        TopUpOrder[]
 
   @@map("users")
 }
@@ -88,16 +92,16 @@ model Court {
 }
 
 model CourtAvailability {
-  id           String       @id @default(uuid()) @map("availability_id")
-  courtId      String       @map("court_id")
-  startTime    DateTime     @map("start_time")
-  endTime      DateTime     @map("end_time")
-  isAvailable  Boolean      @default(true) @map("is_available")
-  basePrice    Decimal?     @map("base_price") @db.Decimal(10, 2)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  bookingItems BookingItem?
-  court        Court        @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  id           String        @id @default(uuid()) @map("availability_id")
+  courtId      String        @map("court_id")
+  startTime    DateTime      @map("start_time")
+  endTime      DateTime      @map("end_time")
+  isAvailable  Boolean       @default(true) @map("is_available")
+  basePrice    Decimal?      @map("base_price") @db.Decimal(10, 2)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  bookingItems BookingItem[]
+  court        Court         @relation(fields: [courtId], references: [id], onDelete: Cascade)
 
   @@unique([courtId, startTime, endTime])
   @@index([courtId, startTime])
@@ -105,22 +109,26 @@ model CourtAvailability {
 }
 
 model Booking {
-  id               String        @id @default(uuid()) @map("booking_id")
-  userId           String        @map("user_id")
-  bookingReference String        @unique @map("booking_reference")
-  status           BookingStatus @default(PENDING)
-  totalAmount      Decimal       @map("total_amount") @db.Decimal(10, 2)
-  paymentStatus    PaymentStatus @default(UNPAID) @map("payment_status")
-  bookedAt         DateTime      @default(now()) @map("booked_at")
-  cancelledAt      DateTime?     @map("cancelled_at")
-  notes            String?
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
-  items            BookingItem[]
-  user             User          @relation(fields: [userId], references: [id])
-  payment          Payment?
+  id                 String              @id @default(uuid()) @map("booking_id")
+  userId             String              @map("user_id")
+  bookingReference   String              @unique @map("booking_reference")
+  status             BookingStatus       @default(PENDING)
+  totalAmount        Decimal             @map("total_amount") @db.Decimal(10, 2)
+  paymentStatus      PaymentStatus       @default(UNPAID) @map("payment_status")
+  bookedAt           DateTime            @default(now()) @map("booked_at")
+  expiresAt          DateTime?           @map("expires_at")
+  expiredAt          DateTime?           @map("expired_at")
+  cancelledAt        DateTime?           @map("cancelled_at")
+  notes              String?
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  items              BookingItem[]
+  user               User                @relation(fields: [userId], references: [id])
+  payment            Payment?
+  walletTransactions WalletTransaction[]
 
   @@index([userId, bookedAt])
+  @@index([status, expiresAt])
   @@map("bookings")
 }
 
@@ -128,7 +136,7 @@ model BookingItem {
   id             String            @id @default(uuid()) @map("booking_item_id")
   bookingId      String            @map("booking_id")
   courtId        String            @map("court_id")
-  availabilityId String            @unique @map("availability_id")
+  availabilityId String            @map("availability_id")
   startTime      DateTime          @map("start_time")
   endTime        DateTime          @map("end_time")
   price          Decimal           @db.Decimal(10, 2)
@@ -139,6 +147,7 @@ model BookingItem {
   court          Court             @relation(fields: [courtId], references: [id])
 
   @@index([bookingId])
+  @@index([availabilityId])
   @@map("booking_items")
 }
 
@@ -157,6 +166,70 @@ model Payment {
   booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+model Wallet {
+  id           String              @id @default(uuid()) @map("wallet_id")
+  userId       String              @unique @map("user_id")
+  balance      Decimal             @default(0) @db.Decimal(10, 2)
+  currency     String              @default("MYR")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+  topUpOrders  TopUpOrder[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id            String                  @id @default(uuid()) @map("wallet_transaction_id")
+  walletId      String                  @map("wallet_id")
+  userId        String                  @map("user_id")
+  bookingId     String?                 @map("booking_id")
+  topUpOrderId  String?                 @unique @map("top_up_order_id")
+  type          WalletTransactionType
+  status        WalletTransactionStatus @default(SUCCESS)
+  amount        Decimal                 @db.Decimal(10, 2)
+  balanceBefore Decimal                 @map("balance_before") @db.Decimal(10, 2)
+  balanceAfter  Decimal                 @map("balance_after") @db.Decimal(10, 2)
+  description   String?
+  reference     String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+  wallet        Wallet                  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking       Booking?                @relation(fields: [bookingId], references: [id])
+  topUpOrder    TopUpOrder?             @relation(fields: [topUpOrderId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@index([userId, createdAt])
+  @@index([bookingId])
+  @@map("wallet_transactions")
+}
+
+model TopUpOrder {
+  id                    String             @id @default(uuid()) @map("top_up_order_id")
+  userId                String             @map("user_id")
+  walletId              String             @map("wallet_id")
+  packageCode           String?            @map("package_code")
+  isCustom              Boolean            @default(false) @map("is_custom")
+  amountRm              Decimal            @map("amount_rm") @db.Decimal(10, 2)
+  credits               Decimal            @db.Decimal(10, 2)
+  currency              String             @default("MYR")
+  status                TopUpOrderStatus   @default(PENDING)
+  stripeSessionId       String?            @unique @map("stripe_session_id")
+  stripePaymentIntentId String?            @unique @map("stripe_payment_intent_id")
+  checkoutUrl           String?            @map("checkout_url")
+  paidAt                DateTime?          @map("paid_at")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet                Wallet             @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  walletTransaction     WalletTransaction?
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("top_up_orders")
 }
 
 enum Role {
@@ -186,6 +259,7 @@ enum BookingStatus {
   CANCELLED
   COMPLETED
   REFUNDED
+  EXPIRED
 }
 
 enum PaymentStatus {
@@ -194,6 +268,29 @@ enum PaymentStatus {
   FAILED
   REFUNDED
   PENDING_REVIEW
+  EXPIRED
+}
+
+enum WalletTransactionType {
+  TOP_UP
+  DEDUCTION
+  REFUND
+  ADJUSTMENT
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum TopUpOrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
 }
 
 enum AnnouncementType {

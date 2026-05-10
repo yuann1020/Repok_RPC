@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bookingsApi } from '@/lib/api/bookings.api';
 
@@ -16,11 +17,29 @@ const formatDateLabel = (isoDate: string) => {
   return date.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const getRemainingMs = (expiresAt?: string | null, nowMs = Date.now()) => {
+  if (!expiresAt) return null;
+  return Math.max(new Date(expiresAt).getTime() - nowMs, 0);
+};
+
+const formatCountdown = (milliseconds: number) => {
+  const totalSeconds = Math.max(Math.floor(milliseconds / 1000), 0);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
 export default function BookingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const bookingId = params?.id as string;
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // 1. Fetch booking details
   const { data: booking, isLoading, isError } = useQuery({
@@ -50,9 +69,16 @@ export default function BookingDetailPage() {
     </div>
   );
 
-  const needsPayment = booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'FAILED';
-  const isCancelled = booking.status === 'CANCELLED';
   const isPaid = booking.paymentStatus === 'PAID';
+  const remainingMs = getRemainingMs(booking.expiresAt, nowMs);
+  const isExpired =
+    booking.status === 'EXPIRED' ||
+    booking.paymentStatus === 'EXPIRED' ||
+    (!isPaid && remainingMs !== null && remainingMs <= 0);
+  const needsPayment =
+    !isExpired &&
+    (booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'FAILED');
+  const isCancelled = booking.status === 'CANCELLED';
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
@@ -66,6 +92,7 @@ export default function BookingDetailPage() {
           <h2 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
              Booking Detail
              {isCancelled && <span className="text-sm px-3 py-1 bg-red-500/20 text-red-500 border border-red-500/50 rounded-full ml-2 uppercase tracking-wide">Cancelled</span>}
+             {isExpired && <span className="text-sm px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded-full ml-2 uppercase tracking-wide">Expired</span>}
           </h2>
           <p className="text-slate-400 mt-1 font-mono tracking-wider text-sm">#{booking.bookingReference}</p>
         </div>
@@ -101,7 +128,7 @@ export default function BookingDetailPage() {
                </div>
                <div>
                  <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block mb-1">Total Amount</span>
-                 <span className="text-xl font-black text-green-400">RM {parseFloat(booking.totalAmount).toFixed(0)}</span>
+                 <span className="text-xl font-black text-green-400">RM {Number(booking.totalAmount).toFixed(0)}</span>
                </div>
             </div>
          </div>
@@ -127,17 +154,30 @@ export default function BookingDetailPage() {
                    <span className="text-xs uppercase font-bold text-slate-500 tracking-wider block mb-2">Payment</span>
                    <span className={`px-4 py-1.5 border rounded-full text-xs font-bold tracking-widest uppercase inline-block ${
                      isPaid ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                     booking.paymentStatus === 'FAILED' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                     booking.paymentStatus === 'FAILED' || booking.paymentStatus === 'EXPIRED' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
                      'bg-slate-700/50 text-slate-300 border-slate-600'
                    }`}>
                      {booking.paymentStatus}
                    </span>
                  </div>
+
+                 {booking.status === 'PENDING' && remainingMs !== null && (
+                   <div className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                     isExpired
+                       ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                       : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                   }`}>
+                     {isExpired
+                       ? 'Expired'
+                       : `Complete payment within ${formatCountdown(remainingMs)}`}
+                   </div>
+                  )}
+
                </div>
 
                {/* Actions */}
                <div className="mt-8 pt-6 border-t border-slate-800/50 space-y-3 flex flex-col">
-                 {!isCancelled && needsPayment && (
+                 {!isCancelled && !isExpired && needsPayment && (
                    <Link 
                      href={`/payments/${booking.id}`}
                      className="w-full text-center py-3 bg-green-500 hover:bg-green-400 transition-colors rounded-xl text-xs font-black tracking-wider text-slate-900 uppercase shadow-[0_0_15px_rgba(7ade80,0.3)]"
@@ -147,7 +187,7 @@ export default function BookingDetailPage() {
                  )}
                  
                  {/* Cancel Action */}
-                 {!isCancelled && (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                 {!isCancelled && !isExpired && (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
                    <button 
                      onClick={() => { if(window.confirm('Are you sure you want to cancel this booking?')) cancelMutation.mutate(); }}
                      disabled={cancelMutation.isPending}
@@ -161,6 +201,15 @@ export default function BookingDetailPage() {
                     <div className="w-full text-center p-3 text-slate-400 text-sm font-semibold border border-white/10 rounded-xl bg-slate-950/50">
                        ✓ Verified & Confirmed.
                     </div>
+                  )}
+
+                 {isExpired && (
+                    <Link
+                      href="/courts"
+                      className="w-full text-center py-3 bg-slate-800 hover:bg-slate-700 transition-colors rounded-xl text-xs font-black tracking-wider text-slate-100 uppercase"
+                    >
+                      BOOK AGAIN
+                    </Link>
                  )}
                </div>
             </div>
