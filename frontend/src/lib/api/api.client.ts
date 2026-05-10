@@ -6,6 +6,7 @@ const getApiBaseUrl = () => {
     process.env.NEXT_PUBLIC_API_URL?.trim() ||
     process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 
+  // Next.js runs on localhost:3000 locally; API calls must target the Nest backend on localhost:3001.
   const fallbackUrl =
     process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
 

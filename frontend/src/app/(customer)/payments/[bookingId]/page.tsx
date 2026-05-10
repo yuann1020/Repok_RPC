@@ -1,12 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bookingsApi } from '@/lib/api/bookings.api';
 import { paymentsApi } from '@/lib/api/payments.api';
+import { walletApi } from '@/lib/api/wallet.api';
 
-// Formatter helpers
 const formatTimeLabel = (isoDate: string) => {
   const date = new Date(isoDate);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -14,8 +15,39 @@ const formatTimeLabel = (isoDate: string) => {
 
 const formatDateLabel = (isoDate: string) => {
   const date = new Date(isoDate);
-  return date.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 };
+
+const formatMoney = (value: string | number) => Number(value).toFixed(2);
+const EXPIRED_BOOKING_MESSAGE =
+  'This booking expired because payment was not completed within 10 minutes.';
+
+const getRemainingMs = (expiresAt?: string | null, nowMs = Date.now()) => {
+  if (!expiresAt) return null;
+  return Math.max(new Date(expiresAt).getTime() - nowMs, 0);
+};
+
+const formatCountdown = (milliseconds: number) => {
+  const totalSeconds = Math.max(Math.floor(milliseconds / 1000), 0);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+function getErrorMessage(error: any) {
+  const message = error?.response?.data?.message;
+  if (typeof message === 'object' && message?.message) return message.message;
+  if (Array.isArray(message)) return message.join(', ');
+  if (typeof message === 'string' && message.toLowerCase().includes('expired')) {
+    return EXPIRED_BOOKING_MESSAGE;
+  }
+  return message || 'Something went wrong. Please try again.';
+}
 
 export default function PaymentGatewayPage() {
   const params = useParams();
@@ -25,238 +57,425 @@ export default function PaymentGatewayPage() {
 
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofBase64, setProofBase64] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
 
-  // 1. Fetch booking details
-  const { data: booking, isLoading: isBookingLoading, isError: isBookingError } = useQuery({
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const bookingQuery = useQuery({
     queryKey: ['booking', bookingId],
     queryFn: () => bookingsApi.getBookingById(bookingId),
     enabled: !!bookingId,
   });
 
-  // 2. Fetch specific nested payment operations 
-  const { data: payment, isLoading: isPaymentLoading } = useQuery({
+  const paymentQuery = useQuery({
     queryKey: ['payment', bookingId],
     queryFn: async () => {
       try {
         return await paymentsApi.getPaymentForBooking(bookingId);
       } catch (err: any) {
-         if (err.response?.status === 404) return null;
-         throw err;
+        if (err.response?.status === 404) return null;
+        throw err;
       }
     },
     enabled: !!bookingId,
     retry: 0,
   });
 
-  // --- MUTATIONS ---
+  const walletQuery = useQuery({
+    queryKey: ['wallet'],
+    queryFn: walletApi.getWallet,
+  });
+
   const initiateMutation = useMutation({
     mutationFn: () => paymentsApi.initiatePayment(bookingId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
-    }
+    },
+  });
+
+  const payWithWalletMutation = useMutation({
+    mutationFn: () => bookingsApi.payWithWallet(bookingId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['payment', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+    },
   });
 
   const uploadProofMutation = useMutation({
-    mutationFn: () => paymentsApi.uploadProof(payment.id, proofBase64!),
+    mutationFn: () => {
+      if (!paymentQuery.data?.id || !proofBase64) {
+        throw new Error('Payment record and proof image are required');
+      }
+      return paymentsApi.uploadProof(paymentQuery.data.id, proofBase64);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] });
     },
-    onError: (err: any) => alert(err.response?.data?.message || 'Failed to upload receipt. Please try again.')
   });
 
-  if (isBookingLoading) return (
-    <div className="flex justify-center flex-col items-center py-32 space-y-4">
-       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-400"></div>
-       <p className="text-slate-400 font-bold uppercase tracking-widest text-xs animate-pulse">Loading transaction...</p>
-    </div>
-  );
+  if (bookingQuery.isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-4 py-32">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-green-400" />
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+          Loading transaction...
+        </p>
+      </div>
+    );
+  }
 
-  if (isBookingError || !booking) return (
-    <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-6 rounded-xl text-center font-medium">
-      Failed to locate the booking. It may have been deleted or does not exist.
-    </div>
-  );
+  if (bookingQuery.isError || !bookingQuery.data) {
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center font-medium text-red-400">
+        Failed to locate the booking. It may have been deleted or does not
+        exist.
+      </div>
+    );
+  }
 
-  // Status Checkers
+  const booking = bookingQuery.data;
+  const payment = paymentQuery.data;
+  const wallet = walletQuery.data;
+  const bookingAmount = Number(booking.totalAmount);
+  const walletBalance = wallet?.balance || 0;
+  const hasEnoughWalletBalance = walletBalance >= bookingAmount;
   const isPaid = booking.paymentStatus === 'PAID';
   const isPendingReview = booking.paymentStatus === 'PENDING_REVIEW';
   const isFailed = booking.paymentStatus === 'FAILED';
+  const remainingMs = getRemainingMs(booking.expiresAt, nowMs);
+  const isExpired =
+    booking.status === 'EXPIRED' ||
+    booking.paymentStatus === 'EXPIRED' ||
+    (!isPaid && remainingMs !== null && remainingMs <= 0);
   const hasPaymentRecord = payment !== null && payment !== undefined;
 
-  const handleFileDrop = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setProofFile(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setProofBase64(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleFileDrop = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setProofFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setProofBase64(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-      
-      {/* 1. Header */}
-      <div className="text-center pb-6 border-b border-slate-800">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Secure Checkout</h1>
-        <p className="text-slate-400">Complete your transaction using TNG eWallet.</p>
-        
-        <div className="mt-6 flex flex-wrap gap-4 items-center justify-center">
-           <span className="px-4 py-1.5 border border-slate-700 bg-slate-900 rounded-full text-xs font-bold uppercase tracking-widest text-slate-300">
-             # {booking.bookingReference}
-           </span>
-           <span className={`px-4 py-1.5 border rounded-full text-xs font-bold uppercase tracking-widest ${
-             isPaid ? 'border-green-500/30 bg-green-500/10 text-green-400' : 
-             isPendingReview ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' :
-             isFailed ? 'border-red-500/30 bg-red-500/10 text-red-400' : 
-             'border-yellow-500/30 bg-yellow-500/10 text-yellow-400'
-           }`}>
-             {booking.paymentStatus.replace('_', ' ')}
-           </span>
-        </div>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-8 pb-20">
+      <div className="border-b border-white/10 pb-6 text-center">
+        <h1 className="text-3xl font-extrabold tracking-tight text-white">
+          Secure Checkout
+        </h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Pay instantly with wallet credits or use manual QR as a fallback.
+        </p>
 
-      {/* 2. Order Summary Dashboard */}
-      <div className="bg-slate-900/40 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-3xl shadow-xl">
-        <h3 className="text-xl font-bold text-slate-100 mb-6 uppercase tracking-wider text-[13px]">Reservation Subtotals</h3>
-        
-        <div className="space-y-4 mb-8">
-           {booking.items.map((item: any, idx: number) => (
-             <div key={item.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 bg-slate-950/50 rounded-xl border border-slate-800/50 gap-4">
-                <div>
-                  <h4 className="font-bold text-green-400">{item.court?.name || 'Pickleball Court'}</h4>
-                  <p className="text-sm font-semibold tracking-wide text-slate-400">{formatDateLabel(item.startTime)}</p>
-                  <p className="text-xs text-slate-500 mt-1 font-mono">{formatTimeLabel(item.startTime)} - {formatTimeLabel(item.endTime)}</p>
-                </div>
-                <div className="text-right">
-                   <span className="text-lg font-black text-white">RM {parseFloat(item.price).toFixed(2)}</span>
-                </div>
-             </div>
-           ))}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+          <span className="rounded-full border border-slate-700 bg-slate-900 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-300">
+            # {booking.bookingReference}
+          </span>
+          <span
+            className={`rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest ${
+              isPaid
+                ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                : isPendingReview
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                  : isExpired
+                    ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                  : isFailed
+                    ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                    : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400'
+            }`}
+          >
+            {booking.paymentStatus.replace('_', ' ')}
+          </span>
         </div>
 
-        <div className="flex justify-between items-center pt-6 border-t border-slate-800 border-dashed">
-          <span className="text-lg font-bold text-slate-400 uppercase tracking-widest">Total Amount</span>
-          <span className="text-4xl font-extrabold text-white">RM <span className="text-green-400">{parseFloat(booking.totalAmount).toFixed(2)}</span></span>
-        </div>
-      </div>
-
-      {/* 3. Transaction Control Center */}
-      <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-8 backdrop-blur-3xl text-center shadow-xl">
-        
-        {isPaid ? (
-           <div className="flex flex-col items-center gap-4 py-4 animate-in zoom-in-95 fill-mode-forwards duration-500">
-             <div className="w-20 h-20 bg-green-500/20 border border-green-500/50 rounded-full flex items-center justify-center mb-2">
-               <span className="text-4xl text-green-400">✓</span>
-             </div>
-             <h3 className="text-2xl font-black text-white">Payment Approved!</h3>
-             <p className="text-slate-400 max-w-sm">Your payment was reviewed and verified. Your booking is officially locked.</p>
-             <button onClick={() => router.push('/bookings')} className="mt-4 bg-slate-800 hover:bg-slate-700 transition-colors text-white font-bold py-3 px-8 rounded-xl tracking-wider text-sm border border-slate-600">
-               VIEW MY BOOKINGS
-             </button>
-           </div>
-           
-        ) : isPendingReview ? (
-           <div className="flex flex-col items-center gap-4 py-4 animate-in zoom-in-95 fill-mode-forwards duration-500">
-             <div className="w-20 h-20 bg-amber-500/20 border border-amber-500/50 rounded-full flex items-center justify-center mb-2">
-               <span className="text-4xl text-amber-400">?</span>
-             </div>
-             <h3 className="text-2xl font-black text-white">Verification Pending...</h3>
-             <p className="text-slate-400 max-w-sm leading-relaxed">Your payment receipt has been successfully received. We are manually reviewing it.</p>
-             <button disabled className="mt-4 bg-amber-500/10 transition-colors text-amber-400 font-bold py-3 px-8 rounded-xl tracking-wider text-[11px] border border-amber-500/20 uppercase opacity-70">
-               WAITING FOR ADMIN
-             </button>
-           </div>
-           
-        ) : isPaymentLoading ? (
-           <div className="py-8"><div className="animate-spin mx-auto rounded-full h-8 w-8 border-t-2 border-b-2 border-green-400"></div></div>
-           
-        ) : (
-           <div className="py-2">
-              {!hasPaymentRecord || isFailed ? (
-                 <div className="flex flex-col items-center gap-6">
-                    {isFailed && (
-                       <p className="text-red-400 text-sm font-semibold p-4 bg-red-500/10 rounded-xl border border-red-500/20 max-w-lg mb-4">
-                         Your previously uploaded receipt was rejected. Please try again.
-                       </p>
-                    )}
-                    <h3 className="text-xl font-bold text-white mb-2">Ready to Pay?</h3>
-                    <p className="text-slate-400 max-w-sm mx-auto mb-2 text-sm leading-relaxed">Click below to generate your unique payment session and reveal the official QR code.</p>
-                    <button 
-                      onClick={() => initiateMutation.mutate()}
-                      disabled={initiateMutation.isPending}
-                      className={`w-full max-w-xs py-4 rounded-xl font-black tracking-wider text-[11px] uppercase text-slate-900 transition-all ${
-                         initiateMutation.isPending ? 'bg-green-600 opacity-60 cursor-not-allowed' : 'bg-green-400 hover:bg-green-300 hover:shadow-[0_0_20px_rgba(7ade80,0.4)]'
-                      }`}
-                    >
-                      {initiateMutation.isPending ? 'GENERATING SECURE LINK...' : 'INITIATE PAYMENT'}
-                    </button>
-                 </div>
-              ) : (
-                 <div className="flex flex-col items-center gap-8 animate-in slide-in-from-bottom-2 duration-500">
-                    
-                    {/* Step 1 */}
-                    <div className="border border-white/10 bg-slate-900/80 p-6 rounded-2xl w-full max-w-md shadow-2xl backdrop-blur-xl">
-                      <div className="flex items-center gap-3 mb-6 justify-center">
-                         <div className="w-8 h-8 rounded-full bg-green-500/20 border border-green-500 text-green-400 font-black flex items-center justify-center">1</div>
-                         <h3 className="text-lg font-bold text-white uppercase tracking-wider">Scan & Pay</h3>
-                      </div>
-                      
-                      <div className="bg-white p-4 rounded-xl flex items-center justify-center mb-4 mx-auto w-48 h-48 sm:w-64 sm:h-64 overflow-hidden border-4 border-slate-200 pointer-events-none select-none">
-                         {/* Fallback to text if missing image, but user drops image in public/tng-qr.jpg */}
-                         <img src="/tng-qr.jpg" alt="TNG QR Code" className="w-full h-full object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                         <span className="text-slate-500 font-bold absolute text-sm empty:hidden -z-10 bg-slate-100 w-48 h-48 flex items-center justify-center rounded-lg text-center p-4">Please upload tng-qr.jpg into /public directory.</span>
-                      </div>
-                      <p className="text-slate-400 text-sm">Please pay <span className="font-bold text-green-400">RM {parseFloat(booking.totalAmount).toFixed(2)}</span> accurately to the provided TNG wallet.</p>
-                    </div>
-
-                    {/* Step 2 */}
-                    <div className="border border-white/10 bg-slate-900/80 p-6 rounded-2xl w-full max-w-md shadow-2xl relative backdrop-blur-xl">
-                      <div className="flex items-center gap-3 mb-6 justify-center">
-                         <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500 text-blue-400 font-black flex items-center justify-center">2</div>
-                         <h3 className="text-lg font-bold text-white uppercase tracking-wider">Upload Receipt</h3>
-                      </div>
-                      
-                      <label className="block w-full border-2 border-dashed border-white/20 rounded-xl p-8 hover:border-green-400 hover:bg-slate-900/50 transition-all cursor-pointer relative group">
-                        <input type="file" accept="image/*" onChange={handleFileDrop} className="hidden" />
-                        {proofBase64 ? (
-                           <div className="flex flex-col items-center">
-                              <img src={proofBase64} alt="Proof preview" className="w-32 h-32 object-cover rounded-lg border-2 border-slate-500 mb-3 group-hover:scale-105 transition-transform" />
-                              <span className="text-sm text-green-400 font-bold truncate max-w-[200px]">{proofFile?.name}</span>
-                              <span className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-black">Click to change</span>
-                           </div>
-                        ) : (
-                           <div className="flex flex-col items-center gap-3">
-                              <span className="text-4xl opacity-50 block transition-transform group-hover:-translate-y-2">📸</span>
-                              <span className="text-sm font-bold text-slate-300">Browse or drop an image here</span>
-                              <span className="text-xs text-slate-500">Supports JPG, PNG</span>
-                           </div>
-                        )}
-                      </label>
-                      
-                      <button 
-                        onClick={() => uploadProofMutation.mutate()}
-                        disabled={uploadProofMutation.isPending || !proofBase64}
-                        className={`w-full mt-6 py-4 rounded-xl font-black tracking-wider text-[11px] uppercase transition-all ${
-                           uploadProofMutation.isPending || !proofBase64 
-                           ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' 
-                           : 'bg-green-500 hover:bg-green-400 text-slate-900 shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                        }`}
-                      >
-                        {uploadProofMutation.isPending ? 'UPLOADING...' : 'SUBMIT RECEIPT FOR REVIEW'}
-                      </button>
-                    </div>
-
-                 </div>
-              )}
-           </div>
+        {!isPaid && !isExpired && remainingMs !== null && (
+          <div className="mx-auto mt-5 max-w-md rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200">
+            Complete payment within {formatCountdown(remainingMs)}
+          </div>
         )}
 
+        {isExpired && (
+          <div className="mx-auto mt-5 max-w-lg rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-semibold text-red-200">
+            {EXPIRED_BOOKING_MESSAGE}
+          </div>
+        )}
       </div>
+
+      <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6 shadow-xl backdrop-blur-3xl md:p-8">
+        <h2 className="mb-6 text-[13px] font-bold uppercase tracking-wider text-slate-100">
+          Reservation Summary
+        </h2>
+
+        <div className="mb-8 space-y-4">
+          {booking.items.map((item: any) => (
+            <div
+              key={item.id}
+              className="flex flex-col gap-4 rounded-xl border border-slate-800/50 bg-slate-950/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <h3 className="font-bold text-green-400">
+                  {item.court?.name || 'Pickleball Court'}
+                </h3>
+                <p className="text-sm font-semibold tracking-wide text-slate-400">
+                  {formatDateLabel(item.startTime)}
+                </p>
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {formatTimeLabel(item.startTime)} - {formatTimeLabel(item.endTime)}
+                </p>
+              </div>
+              <span className="text-lg font-black text-white">
+                RM {formatMoney(item.price)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-dashed border-slate-800 pt-6">
+          <span className="text-sm font-bold uppercase tracking-widest text-slate-400">
+            Total
+          </span>
+          <span className="text-4xl font-extrabold text-white">
+            RM <span className="text-green-400">{formatMoney(bookingAmount)}</span>
+          </span>
+        </div>
+      </section>
+
+      {isPaid ? (
+        <section className="rounded-2xl border border-green-500/30 bg-green-500/10 p-8 text-center shadow-xl">
+          <h2 className="text-2xl font-black text-white">Payment Approved</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+            Your booking is paid and confirmed.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/bookings')}
+            className="mt-6 rounded-xl bg-slate-800 px-8 py-3 text-sm font-bold tracking-wider text-white transition-colors hover:bg-slate-700"
+          >
+            View My Bookings
+          </button>
+        </section>
+      ) : isExpired ? (
+        <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center shadow-xl">
+          <h2 className="text-2xl font-black text-white">Booking Expired</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+            This booking has expired. Please create a new booking to select
+            available slots again.
+          </p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link
+              href="/courts"
+              className="rounded-xl bg-green-500 px-8 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-950 transition-colors hover:bg-green-400"
+            >
+              Book Again
+            </Link>
+            <Link
+              href="/bookings"
+              className="rounded-xl border border-white/10 px-8 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-200 transition-colors hover:border-slate-500"
+            >
+              View Bookings
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl backdrop-blur-3xl md:p-8">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-green-400">
+                  Recommended
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-white">
+                  Pay with Wallet
+                </h2>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-400">
+                  Booking amount: {formatMoney(bookingAmount)} credits. Your
+                  wallet balance: {walletQuery.isLoading ? 'checking...' : `${formatMoney(walletBalance)} credits`}.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 md:min-w-[240px]">
+                {hasEnoughWalletBalance ? (
+                  <button
+                    type="button"
+                    onClick={() => payWithWalletMutation.mutate()}
+                    disabled={payWithWalletMutation.isPending}
+                    className="rounded-xl bg-green-500 px-5 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-950 shadow-lg shadow-green-500/20 transition-colors hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {payWithWalletMutation.isPending ? 'Paying...' : 'Pay with Wallet'}
+                  </button>
+                ) : (
+                  <Link
+                    href="/wallet/top-up"
+                    className="rounded-xl bg-green-500 px-5 py-4 text-center text-xs font-black uppercase tracking-[0.14em] text-slate-950 shadow-lg shadow-green-500/20 transition-colors hover:bg-green-400"
+                  >
+                    Top Up Now
+                  </Link>
+                )}
+                {!hasEnoughWalletBalance && !walletQuery.isLoading && (
+                  <p className="text-center text-xs font-semibold text-amber-300">
+                    Insufficient balance. You need {formatMoney(bookingAmount - walletBalance)} more credits.
+                  </p>
+                )}
+                {payWithWalletMutation.isError && (
+                  <p className="text-center text-xs font-semibold text-red-300">
+                    {getErrorMessage(payWithWalletMutation.error)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {isPendingReview ? (
+            <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8 text-center shadow-xl">
+              <h2 className="text-2xl font-black text-white">
+                Verification Pending
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                Your manual payment receipt has been received and is waiting for
+                admin review.
+              </p>
+            </section>
+          ) : (
+            <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-6 shadow-xl backdrop-blur-3xl md:p-8">
+              <div className="mx-auto max-w-xl text-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
+                  Fallback
+                </p>
+                <h2 className="mt-2 text-xl font-black text-white">
+                  Manual QR Payment
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                  Keep using the existing QR receipt flow if wallet payment is
+                  not available yet.
+                </p>
+              </div>
+
+              {!hasPaymentRecord || isFailed ? (
+                <div className="mt-8 flex flex-col items-center gap-4">
+                  {isFailed && (
+                    <p className="max-w-lg rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-400">
+                      Your previous receipt was rejected. Please try again.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => initiateMutation.mutate()}
+                    disabled={initiateMutation.isPending}
+                    className="w-full max-w-xs rounded-xl bg-slate-800 px-5 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {initiateMutation.isPending
+                      ? 'Preparing...'
+                      : 'Use Manual QR'}
+                  </button>
+                  {initiateMutation.isError && (
+                    <p className="text-sm font-semibold text-red-300">
+                      {getErrorMessage(initiateMutation.error)}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-center">
+                    <div className="mx-auto mb-4 flex h-8 w-8 items-center justify-center rounded-full border border-green-500 bg-green-500/20 font-black text-green-400">
+                      1
+                    </div>
+                    <h3 className="text-lg font-bold uppercase tracking-wider text-white">
+                      Scan and Pay
+                    </h3>
+                    <div className="relative mx-auto my-5 flex h-56 w-56 items-center justify-center overflow-hidden rounded-xl border-4 border-slate-200 bg-white p-4">
+                      <img
+                        src="/tng-qr.jpg"
+                        alt="TNG QR Code"
+                        className="h-full w-full object-contain"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="absolute inset-4 -z-10 flex items-center justify-center rounded-lg bg-slate-100 p-4 text-center text-sm font-bold text-slate-500">
+                        Add tng-qr.jpg to the public directory.
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-400">
+                      Pay exactly{' '}
+                      <span className="font-bold text-green-400">
+                        RM {formatMoney(bookingAmount)}
+                      </span>
+                      .
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-center">
+                    <div className="mx-auto mb-4 flex h-8 w-8 items-center justify-center rounded-full border border-blue-500 bg-blue-500/20 font-black text-blue-400">
+                      2
+                    </div>
+                    <h3 className="text-lg font-bold uppercase tracking-wider text-white">
+                      Upload Receipt
+                    </h3>
+                    <label className="mt-5 block cursor-pointer rounded-xl border-2 border-dashed border-white/20 p-8 transition-colors hover:border-green-400 hover:bg-slate-900/50">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileDrop}
+                        className="hidden"
+                      />
+                      {proofBase64 ? (
+                        <div className="flex flex-col items-center">
+                          <img
+                            src={proofBase64}
+                            alt="Proof preview"
+                            className="mb-3 h-32 w-32 rounded-lg border-2 border-slate-500 object-cover"
+                          />
+                          <span className="max-w-[220px] truncate text-sm font-bold text-green-400">
+                            {proofFile?.name}
+                          </span>
+                          <span className="mt-1 text-xs font-black uppercase tracking-widest text-slate-500">
+                            Click to change
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-3">
+                          <span className="text-sm font-bold text-slate-300">
+                            Browse for receipt image
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            JPG or PNG
+                          </span>
+                        </div>
+                      )}
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => uploadProofMutation.mutate()}
+                      disabled={uploadProofMutation.isPending || !proofBase64}
+                      className="mt-6 w-full rounded-xl bg-green-500 px-5 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-950 transition-colors hover:bg-green-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                    >
+                      {uploadProofMutation.isPending
+                        ? 'Uploading...'
+                        : 'Submit Receipt'}
+                    </button>
+                    {uploadProofMutation.isError && (
+                      <p className="mt-3 text-sm font-semibold text-red-300">
+                        {getErrorMessage(uploadProofMutation.error)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }

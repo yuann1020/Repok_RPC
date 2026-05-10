@@ -6,12 +6,23 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentStatus, BookingStatus } from '@prisma/client';
+import { BookingService } from '../booking/booking.service';
+
+const BOOKING_EXPIRED_MESSAGE =
+  'This booking has expired. Please create a new booking.';
 
 @Injectable()
 export class PaymentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookingService: BookingService,
+  ) {}
 
   async initiatePayment(userId: string, bookingId: string) {
+    if (await this.bookingService.expireBookingIfNeeded(bookingId, userId)) {
+      throw new BadRequestException(BOOKING_EXPIRED_MESSAGE);
+    }
+
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { payment: true },
@@ -25,6 +36,10 @@ export class PaymentService {
       throw new ForbiddenException(
         'Secure access strictly denied for this resource',
       );
+    }
+
+    if (booking.status === BookingStatus.EXPIRED) {
+      throw new BadRequestException(BOOKING_EXPIRED_MESSAGE);
     }
 
     if (booking.paymentStatus === PaymentStatus.PAID) {
@@ -54,6 +69,8 @@ export class PaymentService {
   }
 
   async getPaymentByBookingId(userId: string, bookingId: string) {
+    await this.bookingService.expireBookingIfNeeded(bookingId, userId);
+
     const payment = await this.prisma.payment.findUnique({
       where: { bookingId },
       include: { booking: true },
@@ -80,6 +97,16 @@ export class PaymentService {
 
     if (!payment || payment.booking.userId !== userId) {
       throw new NotFoundException('Payment explicitly not found');
+    }
+
+    if (
+      payment.booking.status === BookingStatus.EXPIRED ||
+      (await this.bookingService.expireBookingIfNeeded(
+        payment.bookingId,
+        userId,
+      ))
+    ) {
+      throw new BadRequestException(BOOKING_EXPIRED_MESSAGE);
     }
 
     if (payment.status === PaymentStatus.PAID) {

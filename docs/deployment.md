@@ -33,6 +33,9 @@ We recommend the following stack for the easiest deployment experience:
    - `SMTP_PASS`: Your Gmail App Password.
    - `FRONTEND_URL`: The final production URL of your frontend (e.g., `https://repok.vercel.app`).
    - `GOOGLE_CLIENT_ID`: From Google Cloud Console.
+   - `STRIPE_SECRET_KEY`: Your Stripe secret key.
+   - `STRIPE_WEBHOOK_SECRET`: Your Stripe webhook signing secret.
+   - `BOOKING_HOLD_MINUTES`: `10` for the unpaid booking hold window.
 
 ---
 
@@ -45,6 +48,12 @@ We recommend the following stack for the easiest deployment experience:
 4. Set the following **Environment Variables**:
    - `NEXT_PUBLIC_API_URL`: The URL of your deployed backend (e.g., `https://backend-production.up.railway.app`).
    - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: From Google Cloud Console.
+   - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`: Your Stripe publishable key.
+
+---
+
+## 4. Local Stripe Wallet Setup
+See [Stripe Wallet Local Setup](./stripe-wallet-local.md) for the local port map and Stripe CLI webhook test flow.
 
 ---
 

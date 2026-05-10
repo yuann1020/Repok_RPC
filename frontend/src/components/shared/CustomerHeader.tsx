@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth-store';
 const NAV_LINKS = [
   { href: '/courts', label: 'Courts' },
   { href: '/bookings', label: 'My Bookings' },
+  { href: '/wallet', label: 'Wallet' },
   { href: '/announcements', label: 'Announcements' },
   { href: '/contact', label: 'Contact' },
   { href: '/location', label: 'Location' },

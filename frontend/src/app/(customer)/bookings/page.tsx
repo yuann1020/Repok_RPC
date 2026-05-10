@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { bookingsApi } from '@/lib/api/bookings.api';
 
@@ -14,7 +15,26 @@ const formatTimeLabel = (isoDate: string) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const getRemainingMs = (expiresAt?: string | null, nowMs = Date.now()) => {
+  if (!expiresAt) return null;
+  return Math.max(new Date(expiresAt).getTime() - nowMs, 0);
+};
+
+const formatCountdown = (milliseconds: number) => {
+  const totalSeconds = Math.max(Math.floor(milliseconds / 1000), 0);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
 export default function BookingsHistoryPage() {
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const { data: bookings, isLoading, isError } = useQuery({
     queryKey: ['my-bookings'],
     queryFn: () => bookingsApi.getMyBookings(),
@@ -26,7 +46,7 @@ export default function BookingsHistoryPage() {
     if (status === 'CONFIRMED' || status === 'PAID') classes = "bg-green-500/10 text-green-400 border-green-500/30";
     if (status === 'CONFIRMED' || status === 'PAID' || status === 'COMPLETED') classes = "bg-green-500/10 text-green-400 border-green-500/30";
     else if (status === 'PENDING' || status === 'UPCOMING') classes = "bg-blue-500/10 text-blue-400 border-blue-500/30";
-    else if (status === 'FAILED' || status === 'CANCELLED') classes = "bg-red-500/10 text-red-400 border-red-500/30";
+    else if (status === 'FAILED' || status === 'CANCELLED' || status === 'EXPIRED') classes = "bg-red-500/10 text-red-400 border-red-500/30";
     else if (status === 'UNPAID') classes = "bg-slate-700/50 text-slate-300 border-slate-600";
     else classes = "bg-slate-800 text-slate-400 border-slate-700";
 
@@ -76,8 +96,16 @@ export default function BookingsHistoryPage() {
       {!isLoading && !isError && bookings && bookings.length > 0 && (
         <div className="grid grid-cols-1 gap-6">
           {bookings.map((booking: any) => {
-            
-            const needsPayment = booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'FAILED';
+            const remainingMs = getRemainingMs(booking.expiresAt, nowMs);
+            const isPaid = booking.paymentStatus === 'PAID';
+            const isExpired =
+              booking.status === 'EXPIRED' ||
+              booking.paymentStatus === 'EXPIRED' ||
+              (!isPaid && remainingMs !== null && remainingMs <= 0);
+            const needsPayment =
+              !isExpired &&
+              (booking.paymentStatus === 'UNPAID' ||
+                booking.paymentStatus === 'FAILED');
             
             const groupedCourts = Array.from(new Set(booking.items.map((item: any) => item.court?.name)));
 
@@ -125,14 +153,26 @@ export default function BookingsHistoryPage() {
                            ))}
                          </div>
                        </div>
-                     </div>
+                      </div>
+
+                      {booking.status === 'PENDING' && remainingMs !== null && (
+                        <div className={`rounded-xl border px-4 py-3 text-xs font-bold ${
+                          isExpired
+                            ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                            : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                        }`}>
+                          {isExpired
+                            ? 'Expired'
+                            : `Complete payment within ${formatCountdown(remainingMs)}`}
+                        </div>
+                      )}
 
                   </div>
 
                   <div className="md:border-l md:border-slate-200 dark:md:border-slate-800 md:pl-8 flex flex-col justify-between items-start md:items-end min-w-[200px]">
                      <div className="mb-6 md:mb-0">
                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-500 block md:text-right mb-1">Total Amount</span>
-                       <span className="text-3xl font-black text-slate-900 dark:text-white">RM {parseFloat(booking.totalAmount).toFixed(0)}</span>
+                       <span className="text-3xl font-black text-slate-900 dark:text-white">RM {Number(booking.totalAmount).toFixed(0)}</span>
                      </div>
                      
                      <div className="w-full flex justify-end gap-3 mt-4">
