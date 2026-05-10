@@ -99,8 +99,8 @@ export const adminApi = {
     return response.data;
   },
 
-  reviewPayment: async (paymentId: string, status: 'PAID' | 'FAILED') => {
-    const response = await apiClient.post(`/admin/payments/${paymentId}/review`, { status });
+  reviewPayment: async ({ paymentId, decision, adminNote }: { paymentId: string; decision: 'APPROVE' | 'REJECT'; adminNote?: string }) => {
+    const response = await apiClient.post(`/admin/payments/${paymentId}/review`, { decision, adminNote });
     return response.data;
   },
 
@@ -111,6 +111,12 @@ export const adminApi = {
 
   deleteAllPayments: async () => {
     const response = await apiClient.post('/admin/payments/delete-all');
+    return response.data;
+  },
+
+  // --- Admin Analytics ---
+  getAdminAnalyticsSummary: async (params?: { month?: string; startDate?: string; endDate?: string }) => {
+    const response = await apiClient.get('/admin/analytics/summary', { params });
     return response.data;
   }
 };

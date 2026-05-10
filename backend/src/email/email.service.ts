@@ -13,8 +13,8 @@ export class EmailService {
       port: this.configService.get<number>('SMTP_PORT', 587),
       secure: false, // true for 465, false for other ports
       auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
+        user: this.configService.get<string>('SMTP_USER')?.replace(/^["']|["']$/g, ''),
+        pass: this.configService.get<string>('SMTP_PASS')?.replace(/^["']|["']$/g, ''),
       },
     });
   }
@@ -104,11 +104,12 @@ export class EmailService {
     };
 
     try {
+      this.logger.log(`Attempting to send booking confirmation email for booking ${params.bookingReference} to ${params.email}`);
       await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Booking confirmation email sent to ${params.email} for ${params.bookingReference}`);
+      this.logger.log(`Successfully sent booking confirmation email to ${params.email} for ${params.bookingReference}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown SMTP error';
-      this.logger.warn(
+      this.logger.error(
         `Failed to send booking confirmation email to ${params.email}: ${message}`,
       );
       throw error; // Rethrow to let caller handle it

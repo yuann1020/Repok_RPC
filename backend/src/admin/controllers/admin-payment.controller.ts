@@ -39,9 +39,9 @@ export class AdminPaymentController {
   @Post(':id/review')
   async reviewPayment(
     @Param('id') id: string,
-    @Body('status') status: PaymentStatus,
+    @Body() body: { decision: 'APPROVE' | 'REJECT'; adminNote?: string },
   ) {
-    return this.adminPaymentService.reviewPayment(id, status);
+    return this.adminPaymentService.reviewPayment(id, body);
   }
 
   @Post('bulk-delete')
