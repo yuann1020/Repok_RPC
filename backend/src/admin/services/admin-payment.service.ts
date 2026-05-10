@@ -54,7 +54,7 @@ export class AdminPaymentService {
     return payment;
   }
 
-  async reviewPayment(id: string, status: PaymentStatus) {
+  async reviewPayment(id: string, payload: { decision: 'APPROVE' | 'REJECT'; adminNote?: string }) {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
       include: {
@@ -68,6 +68,16 @@ export class AdminPaymentService {
     });
     if (!payment)
       throw new NotFoundException('Payment record not securely located');
+
+    if (payment.booking.status === BookingStatus.EXPIRED) {
+      throw new NotFoundException('This booking has expired and cannot be approved.');
+    }
+
+    if (payment.status === PaymentStatus.PAID) {
+      throw new NotFoundException('This payment is already approved.');
+    }
+
+    const status = payload.decision === 'APPROVE' ? PaymentStatus.PAID : PaymentStatus.FAILED;
 
     const result = await this.prisma.$transaction(async (prisma) => {
       const updatedPayment = await prisma.payment.update({
@@ -85,7 +95,8 @@ export class AdminPaymentService {
           status:
             status === PaymentStatus.PAID
               ? BookingStatus.CONFIRMED
-              : BookingStatus.PENDING,
+              : payment.booking.status, // Keep pending if rejected, let expiry handle it
+          notes: payload.adminNote || payment.booking.notes,
         },
       });
 

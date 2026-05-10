@@ -377,14 +377,18 @@ export default function AdminPaymentsPage() {
                                     <img src={expandedPayment.proofImageUrl} alt="Proof" className="max-w-full md:max-w-[400px] rounded-lg border-4 border-slate-800 shadow-xl" />
                                   </div>
                                   
-                                  {expandedPayment.status === 'PENDING_REVIEW' && (
+                                  {expandedPayment.status === 'PENDING_REVIEW' && expandedPayment.booking?.status !== 'EXPIRED' && (
                                     <div className="flex flex-wrap gap-4 justify-center border-t border-slate-700/50 pt-6">
                                       <button 
                                         onClick={async () => {
                                            if (confirm('Reject this payment proof?')) {
-                                              await adminApi.reviewPayment(expandedPayment.id, 'FAILED');
-                                              refetch();
-                                              setExpandedId(null);
+                                              try {
+                                                await adminApi.reviewPayment({ paymentId: expandedPayment.id, decision: 'REJECT' });
+                                                refetch();
+                                                setExpandedId(null);
+                                              } catch(err: any) {
+                                                alert(err.response?.data?.message || 'Failed to reject payment');
+                                              }
                                            }
                                         }}
                                         className="py-2.5 px-6 rounded-lg text-xs font-black uppercase tracking-widest text-red-500 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 transition-all"
@@ -395,15 +399,24 @@ export default function AdminPaymentsPage() {
                                       <button 
                                         onClick={async () => {
                                            if (confirm('Approve this payment proof and confirm booking?')) {
-                                              await adminApi.reviewPayment(expandedPayment.id, 'PAID');
-                                              refetch();
-                                              setExpandedId(null);
+                                              try {
+                                                await adminApi.reviewPayment({ paymentId: expandedPayment.id, decision: 'APPROVE' });
+                                                refetch();
+                                                setExpandedId(null);
+                                              } catch(err: any) {
+                                                alert(err.response?.data?.message || 'Failed to approve payment');
+                                              }
                                            }
                                         }}
                                         className="py-2.5 px-8 rounded-lg text-xs font-black uppercase tracking-widest text-slate-900 bg-green-500 hover:bg-green-400 hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all"
                                       >
                                         Approve Payment
                                       </button>
+                                    </div>
+                                  )}
+                                  {expandedPayment.booking?.status === 'EXPIRED' && expandedPayment.status === 'PENDING_REVIEW' && (
+                                    <div className="mt-4 text-center">
+                                      <p className="text-sm font-bold text-red-400">This booking has expired and cannot be approved.</p>
                                     </div>
                                   )}
                                 </div>

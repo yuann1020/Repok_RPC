@@ -40,4 +40,9 @@ export class AdminBookingController {
   async deleteAllBookings() {
     return this.adminBookingService.deleteAllBookings();
   }
+
+  @Post(':id/resend-confirmation-email')
+  async resendConfirmationEmail(@Param('id') id: string) {
+    return this.adminBookingService.resendConfirmationEmail(id);
+  }
 }

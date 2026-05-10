@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FilterBookingsAdminDto } from '../dto/filter-bookings.admin.dto';
+import { EmailService } from '../../email/email.service';
+import { BookingStatus, PaymentStatus } from '@prisma/client';
 
 @Injectable()
 export class AdminBookingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AdminBookingService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async getAllBookings(filterDto: FilterBookingsAdminDto) {
     const { status, date, userId, courtId } = filterDto;
@@ -96,5 +103,59 @@ export class AdminBookingService {
 
       return prisma.booking.deleteMany({});
     });
+  }
+
+  async resendConfirmationEmail(id: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        items: { include: { court: true } },
+        payment: true,
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (booking.status !== BookingStatus.CONFIRMED || booking.paymentStatus !== PaymentStatus.PAID) {
+      throw new BadRequestException('Cannot send confirmation email for unpaid or unconfirmed booking');
+    }
+
+    if (!booking.user) {
+      throw new BadRequestException('Booking has no user attached');
+    }
+
+    try {
+      const firstItem = booking.items[0];
+      const lastItem = booking.items[booking.items.length - 1];
+
+      await this.emailService.sendBookingConfirmationEmail({
+        email: booking.user.email,
+        customerName: booking.user.fullName || 'Customer',
+        bookingReference: booking.bookingReference,
+        courtName: firstItem?.court?.name || 'Pickleball Court',
+        bookingDate: firstItem?.startTime.toISOString().split('T')[0] || 'TBD',
+        startTime: firstItem?.startTime.toISOString() || 'TBD',
+        endTime: lastItem?.endTime.toISOString() || 'TBD',
+        totalAmount: Number(booking.totalAmount).toFixed(2),
+        paymentMethod: booking.payment?.paymentProvider || 'Unknown',
+        bookingId: booking.id,
+      });
+
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { confirmationEmailSentAt: new Date() },
+      });
+
+      return { success: true, message: 'Confirmation email resent successfully' };
+    } catch (error) {
+      this.logger.error(`Failed to manually resend confirmation email for booking ${booking.id}`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { confirmationEmailLastError: errorMessage },
+      });
+      throw new BadRequestException(`Failed to resend email: ${errorMessage}`);
+    }
   }
 }

@@ -12,6 +12,9 @@ import { AdminUserService } from './services/admin-user.service';
 
 import { EmailModule } from '../email/email.module';
 
+import { AdminAnalyticsController } from './controllers/admin-analytics.controller';
+import { AdminAnalyticsService } from './services/admin-analytics.service';
+
 @Module({
   imports: [EmailModule],
   controllers: [
@@ -20,6 +23,7 @@ import { EmailModule } from '../email/email.module';
     AdminBookingController,
     AdminPaymentController,
     AdminUserController,
+    AdminAnalyticsController,
   ],
   providers: [
     AdminAnnouncementService,
@@ -27,6 +31,7 @@ import { EmailModule } from '../email/email.module';
     AdminBookingService,
     AdminPaymentService,
     AdminUserService,
+    AdminAnalyticsService,
   ],
 })
 export class AdminModule {}

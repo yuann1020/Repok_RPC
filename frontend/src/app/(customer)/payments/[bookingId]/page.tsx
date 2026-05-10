@@ -348,15 +348,11 @@ export default function PaymentGatewayPage() {
           ) : (
             <section className="rounded-2xl border border-white/10 bg-slate-900/55 p-6 shadow-xl backdrop-blur-3xl md:p-8">
               <div className="mx-auto max-w-xl text-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
-                  Fallback
-                </p>
                 <h2 className="mt-2 text-xl font-black text-white">
                   Manual QR Payment
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                  Keep using the existing QR receipt flow if wallet payment is
-                  not available yet.
+                  Scan the QR code, complete your transfer, then upload your payment receipt for admin approval.
                 </p>
               </div>
 
