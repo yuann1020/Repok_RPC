@@ -36,7 +36,7 @@
 Repok is a modern, end-to-end venue management system tailored for pickleball facilities. It provides a seamless booking experience for players and a comprehensive management dashboard for administrators. Customers can easily browse courts, select time slots, and pay via an integrated digital wallet or manual QR upload. Administrators can oversee courts, handle approvals, and track revenue through an interactive analytics dashboard.
 
 **[Live Demo](#) | [Demo Video](#)**  
-*(Replace placeholders with actual links)*
+*(https://drive.google.com/file/d/1OGIW4mQ8s5UksspGy_qBjqBSzMwUjvB4/view?usp=sharing)*
 
 ## 🚀 Tech Stack
 
