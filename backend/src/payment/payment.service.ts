@@ -25,7 +25,14 @@ export class PaymentService {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { payment: true },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        payment: true,
+      },
     });
 
     if (!booking) {
@@ -73,7 +80,16 @@ export class PaymentService {
 
     const payment = await this.prisma.payment.findUnique({
       where: { bookingId },
-      include: { booking: true },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            paymentStatus: true,
+          },
+        },
+      },
     });
 
     if (!payment || payment.booking.userId !== userId) {
@@ -92,7 +108,16 @@ export class PaymentService {
 
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { booking: true },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            paymentStatus: true,
+          },
+        },
+      },
     });
 
     if (!payment || payment.booking.userId !== userId) {
@@ -138,7 +163,14 @@ export class PaymentService {
   async markAsFailed(userId: string, paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { booking: true },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!payment || payment.booking.userId !== userId) {

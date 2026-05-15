@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -68,6 +69,8 @@ export default function PaymentGatewayPage() {
     queryKey: ['booking', bookingId],
     queryFn: () => bookingsApi.getBookingById(bookingId),
     enabled: !!bookingId,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const paymentQuery = useQuery({
@@ -82,11 +85,15 @@ export default function PaymentGatewayPage() {
     },
     enabled: !!bookingId,
     retry: 0,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const walletQuery = useQuery({
     queryKey: ['wallet'],
     queryFn: walletApi.getWallet,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const initiateMutation = useMutation({
@@ -390,9 +397,11 @@ export default function PaymentGatewayPage() {
                     </h3>
                     <p className="mt-2 text-sm text-slate-400">Scan this QR code to make payment manually.</p>
                     <div className="relative mx-auto my-5 flex h-56 w-56 items-center justify-center overflow-hidden rounded-xl border-4 border-slate-200 bg-white p-4">
-                      <img
+                      <Image
                         src="/payment/manual-qr.png"
                         alt="Manual Payment QR Code"
+                        width={224}
+                        height={224}
                         className="h-full w-full object-contain"
                         onError={(event) => {
                           event.currentTarget.style.display = 'none';
@@ -438,9 +447,12 @@ export default function PaymentGatewayPage() {
                       />
                       {proofBase64 ? (
                         <div className="flex flex-col items-center">
-                          <img
+                          <Image
                             src={proofBase64}
                             alt="Proof preview"
+                            width={128}
+                            height={128}
+                            unoptimized
                             className="mb-3 h-32 w-32 rounded-lg border-2 border-slate-500 object-cover"
                           />
                           <span className="max-w-[220px] truncate text-sm font-bold text-green-400">

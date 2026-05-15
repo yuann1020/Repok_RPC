@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
+import { RequestTimingInterceptor } from './common/interceptors/request-timing.interceptor';
 
 const DEFAULT_BACKEND_PORT = 3001;
 const LOCAL_FRONTEND_ORIGIN = 'http://localhost:3000';
@@ -25,6 +26,7 @@ async function bootstrap() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  app.useGlobalInterceptors(new RequestTimingInterceptor());
   const allowedOrigins = getAllowedOrigins();
   app.enableCors({
     origin: (
@@ -45,4 +47,4 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://0.0.0.0:${port}`);
 }
-bootstrap();
+void bootstrap();

@@ -27,6 +27,7 @@ model User {
   walletTransactions WalletTransaction[]
   topUpOrders        TopUpOrder[]
 
+  @@index([role, createdAt])
   @@map("users")
 }
 
@@ -58,6 +59,7 @@ model Announcement {
   comments        Comment[]
 
   @@index([isActive])
+  @@index([isActive, createdAt])
   @@index([createdByUserId])
   @@map("announcements")
 }
@@ -72,6 +74,7 @@ model Comment {
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([announcementId, createdAt])
   @@map("comments")
 }
 
@@ -88,6 +91,8 @@ model Court {
   bookingItems   BookingItem[]
   availabilities CourtAvailability[]
 
+  @@index([status, name])
+  @@index([category, status])
   @@map("courts")
 }
 
@@ -105,6 +110,7 @@ model CourtAvailability {
 
   @@unique([courtId, startTime, endTime])
   @@index([courtId, startTime])
+  @@index([courtId, isAvailable, startTime])
   @@map("court_availabilities")
 }
 
@@ -131,6 +137,9 @@ model Booking {
 
   @@index([userId, bookedAt])
   @@index([status, expiresAt])
+  @@index([bookedAt])
+  @@index([status, bookedAt])
+  @@index([createdAt])
   @@map("bookings")
 }
 
@@ -150,6 +159,7 @@ model BookingItem {
 
   @@index([bookingId])
   @@index([availabilityId])
+  @@index([courtId, startTime])
   @@map("booking_items")
 }
 
@@ -167,6 +177,9 @@ model Payment {
   proofImageUrl   String?       @map("proof_image_url")
   booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  @@index([status, createdAt])
+  @@index([status, paidAt])
+  @@index([status, paymentProvider, paidAt])
   @@map("payments")
 }
 
@@ -206,6 +219,7 @@ model WalletTransaction {
   @@index([walletId, createdAt])
   @@index([userId, createdAt])
   @@index([bookingId])
+  @@index([type, status])
   @@map("wallet_transactions")
 }
 
@@ -231,6 +245,7 @@ model TopUpOrder {
 
   @@index([userId, createdAt])
   @@index([status])
+  @@index([status, paidAt])
   @@map("top_up_orders")
 }
 

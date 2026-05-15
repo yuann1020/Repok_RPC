@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -249,7 +250,7 @@ export default function AdminAnnouncementsPage() {
               <div className="grid grid-cols-3 gap-2">
                 {form.imageUrls.map((url, idx) => (
                   <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                    <img src={url} alt={`Announcement photo ${idx + 1}`} className="w-full h-full object-cover" />
+                    <Image src={url} alt={`Announcement photo ${idx + 1}`} fill unoptimized sizes="33vw" className="object-cover" />
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}
@@ -344,8 +345,8 @@ export default function AdminAnnouncementsPage() {
                 {announcement.imageUrls?.length > 0 && (
                   <div className="grid grid-cols-4 gap-2">
                     {announcement.imageUrls.map((url, i) => (
-                      <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-800">
-                        <img src={url} alt={`Gallery image ${i + 1}`} className="w-full h-full object-cover" />
+                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-800">
+                        <Image src={url} alt={`Gallery image ${i + 1}`} fill unoptimized sizes="25vw" className="object-cover" />
                       </div>
                     ))}
                   </div>

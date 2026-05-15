@@ -6,10 +6,16 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAnnouncementAdminDto } from '../dto/create-announcement.admin.dto';
 import { UpdateAnnouncementAdminDto } from '../dto/update-announcement.admin.dto';
+import { TtlCacheService } from '../../common/cache/ttl-cache.service';
+
+const ANNOUNCEMENTS_CACHE_PREFIX = 'announcements:';
 
 @Injectable()
 export class AdminAnnouncementService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: TtlCacheService,
+  ) {}
 
   async getAllAnnouncements() {
     return this.prisma.announcement.findMany({
@@ -29,7 +35,7 @@ export class AdminAnnouncementService {
   async createAnnouncement(userId: string, dto: CreateAnnouncementAdminDto) {
     this.validateDateWindow(dto.startsAt, dto.endsAt);
 
-    return this.prisma.announcement.create({
+    const announcement = await this.prisma.announcement.create({
       data: {
         title: dto.title,
         message: dto.message,
@@ -41,6 +47,9 @@ export class AdminAnnouncementService {
         createdByUserId: userId,
       },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return announcement;
   }
 
   async updateAnnouncement(id: string, dto: UpdateAnnouncementAdminDto) {
@@ -54,7 +63,7 @@ export class AdminAnnouncementService {
 
     this.validateDateWindow(dto.startsAt, dto.endsAt);
 
-    return this.prisma.announcement.update({
+    const announcement = await this.prisma.announcement.update({
       where: { id },
       data: {
         title: dto.title,
@@ -62,18 +71,32 @@ export class AdminAnnouncementService {
         type: dto.type,
         isActive: dto.isActive,
         imageUrls: dto.imageUrls,
-        startsAt: dto.startsAt ? new Date(dto.startsAt) : dto.startsAt === null ? null : undefined,
-        endsAt: dto.endsAt ? new Date(dto.endsAt) : dto.endsAt === null ? null : undefined,
+        startsAt: dto.startsAt
+          ? new Date(dto.startsAt)
+          : dto.startsAt === null
+            ? null
+            : undefined,
+        endsAt: dto.endsAt
+          ? new Date(dto.endsAt)
+          : dto.endsAt === null
+            ? null
+            : undefined,
       },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return announcement;
   }
 
   async deleteAnnouncement(id: string) {
     try {
-      return await this.prisma.announcement.delete({
+      const announcement = await this.prisma.announcement.delete({
         where: { id },
       });
-    } catch (error) {
+
+      this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+      return announcement;
+    } catch {
       throw new NotFoundException('Announcement not found');
     }
   }

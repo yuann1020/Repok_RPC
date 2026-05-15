@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api/admin.api';
 import { PickleballLoader } from '@/components/ui/PickleballLoader';
@@ -62,9 +63,9 @@ export default function AdminUsersPage() {
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-black text-slate-400 overflow-hidden">
+                      <div className="relative w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-black text-slate-400 overflow-hidden">
                         {u.profileImageUrl ? (
-                          <img src={u.profileImageUrl} alt={`${u.fullName}'s profile`} className="w-full h-full object-cover" />
+                          <Image src={u.profileImageUrl} alt={`${u.fullName}'s profile`} fill unoptimized sizes="32px" className="object-cover" />
                         ) : (
                           u.fullName?.charAt(0) || '?'
                         )}

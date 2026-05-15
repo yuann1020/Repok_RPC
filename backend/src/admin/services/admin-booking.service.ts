@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FilterBookingsAdminDto } from '../dto/filter-bookings.admin.dto';
 import { EmailService } from '../../email/email.service';
-import { BookingStatus, PaymentStatus } from '@prisma/client';
+import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AdminBookingService {
@@ -15,7 +20,7 @@ export class AdminBookingService {
 
   async getAllBookings(filterDto: FilterBookingsAdminDto) {
     const { status, date, userId, courtId } = filterDto;
-    const where: any = {};
+    const where: Prisma.BookingWhereInput = {};
 
     if (status) where.status = status;
     if (userId) where.userId = userId;
@@ -39,10 +44,24 @@ export class AdminBookingService {
     return this.prisma.booking.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        bookingReference: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        bookedAt: true,
+        createdAt: true,
         user: { select: { fullName: true, email: true, phoneNumber: true } },
-        items: { include: { court: { select: { name: true } } } },
-        payment: { select: { status: true, amount: true } },
+        items: {
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            price: true,
+            court: { select: { name: true } },
+          },
+        },
       },
     });
   }
@@ -50,10 +69,41 @@ export class AdminBookingService {
   async getBookingById(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: {
-        user: true,
-        items: { include: { court: true, availability: true } },
-        payment: true,
+      select: {
+        id: true,
+        bookingReference: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        bookedAt: true,
+        expiresAt: true,
+        expiredAt: true,
+        notes: true,
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            price: true,
+            court: { select: { id: true, name: true } },
+          },
+        },
+        payment: {
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            paymentProvider: true,
+          },
+        },
       },
     });
 
@@ -67,7 +117,7 @@ export class AdminBookingService {
       // 1. Get all bookings to release slots
       const bookings = await prisma.booking.findMany({
         where: { id: { in: ids } },
-        include: { items: true },
+        select: { items: { select: { availabilityId: true } } },
       });
 
       const availabilityIds = bookings.flatMap((b) =>
@@ -108,17 +158,33 @@ export class AdminBookingService {
   async resendConfirmationEmail(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: {
-        user: true,
-        items: { include: { court: true } },
-        payment: true,
+      select: {
+        id: true,
+        bookingReference: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        user: { select: { email: true, fullName: true } },
+        items: {
+          select: {
+            startTime: true,
+            endTime: true,
+            court: { select: { name: true } },
+          },
+        },
+        payment: { select: { paymentProvider: true } },
       },
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    if (booking.status !== BookingStatus.CONFIRMED || booking.paymentStatus !== PaymentStatus.PAID) {
-      throw new BadRequestException('Cannot send confirmation email for unpaid or unconfirmed booking');
+    if (
+      booking.status !== BookingStatus.CONFIRMED ||
+      booking.paymentStatus !== PaymentStatus.PAID
+    ) {
+      throw new BadRequestException(
+        'Cannot send confirmation email for unpaid or unconfirmed booking',
+      );
     }
 
     if (!booking.user) {
@@ -147,10 +213,17 @@ export class AdminBookingService {
         data: { confirmationEmailSentAt: new Date() },
       });
 
-      return { success: true, message: 'Confirmation email resent successfully' };
+      return {
+        success: true,
+        message: 'Confirmation email resent successfully',
+      };
     } catch (error) {
-      this.logger.error(`Failed to manually resend confirmation email for booking ${booking.id}`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to manually resend confirmation email for booking ${booking.id}`,
+        error,
+      );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       await this.prisma.booking.update({
         where: { id: booking.id },
         data: { confirmationEmailLastError: errorMessage },

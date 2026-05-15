@@ -13,11 +13,13 @@ import { AdminModule } from './admin/admin.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { EmailModule } from './email/email.module';
 import { WalletModule } from './wallet/wallet.module';
+import { CacheModule } from './common/cache/cache.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     ScheduleModule.forRoot(),
+    CacheModule,
     PrismaModule,
     AuthModule,
     CourtModule,

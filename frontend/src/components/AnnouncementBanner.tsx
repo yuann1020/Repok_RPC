@@ -6,16 +6,18 @@ import { announcementsApi, Announcement } from '@/lib/api/announcements.api';
 import { MegaphoneIcon, XMarkIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 export function AnnouncementBanner() {
+  const [visibleIdx, setVisibleIdx] = useState(0);
+  const [isDismissed, setIsDismissed] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['active-announcements'],
     queryFn: announcementsApi.getActiveAnnouncements,
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: isDismissed ? false : 60000,
     retry: 1,
+    staleTime: 60000,
   });
 
   const announcements = useMemo(() => (Array.isArray(data) ? data : []), [data]);
-  const [visibleIdx, setVisibleIdx] = useState(0);
-  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     if (visibleIdx >= announcements.length) {

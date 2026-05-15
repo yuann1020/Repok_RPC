@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api/admin.api';
@@ -374,7 +375,14 @@ export default function AdminPaymentsPage() {
                                 <div className="mt-6 p-4 rounded-xl border border-slate-700/50" style={{ background: 'rgba(15,23,42,0.9)' }}>
                                   <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-black mb-3 text-center">Customer Payment Proof Image</p>
                                   <div className="flex justify-center mb-6">
-                                    <img src={expandedPayment.proofImageUrl} alt="Proof" className="max-w-full md:max-w-[400px] rounded-lg border-4 border-slate-800 shadow-xl" />
+                                    <Image
+                                      src={expandedPayment.proofImageUrl}
+                                      alt="Proof"
+                                      width={400}
+                                      height={600}
+                                      unoptimized
+                                      className="h-auto max-w-full rounded-lg border-4 border-slate-800 shadow-xl md:max-w-[400px]"
+                                    />
                                   </div>
                                   
                                   {expandedPayment.status === 'PENDING_REVIEW' && expandedPayment.booking?.status !== 'EXPIRED' && (

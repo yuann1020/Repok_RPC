@@ -8,6 +8,7 @@ import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { BookingService } from '../booking/booking.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AvailabilityService {
@@ -20,7 +21,7 @@ export class AvailabilityService {
     await this.bookingService.expireUnpaidBookings();
 
     const { courtId, date, includeUnavailable } = query;
-    const where: any = {};
+    const where: Prisma.CourtAvailabilityWhereInput = {};
 
     if (courtId) {
       where.courtId = courtId;
@@ -44,6 +45,14 @@ export class AvailabilityService {
     const slots = await this.prisma.courtAvailability.findMany({
       where,
       orderBy: { startTime: 'asc' },
+      select: {
+        id: true,
+        courtId: true,
+        startTime: true,
+        endTime: true,
+        isAvailable: true,
+        basePrice: true,
+      },
     });
 
     // JIT: Just-In-Time Auto Generation
@@ -59,6 +68,14 @@ export class AvailabilityService {
       return this.prisma.courtAvailability.findMany({
         where,
         orderBy: { startTime: 'asc' },
+        select: {
+          id: true,
+          courtId: true,
+          startTime: true,
+          endTime: true,
+          isAvailable: true,
+          basePrice: true,
+        },
       });
     }
 
@@ -83,7 +100,7 @@ export class AvailabilityService {
 
     const price = basePrice || Number(court.pricePerHour);
 
-    const slots = [];
+    const slots: Prisma.CourtAvailabilityCreateManyInput[] = [];
     const currentDate = new Date(start);
 
     while (currentDate <= end) {

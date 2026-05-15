@@ -37,6 +37,7 @@ export default function CourtDetailPage() {
     queryKey: ['court', courtId],
     queryFn: () => courtsApi.getCourtById(courtId),
     enabled: !!courtId,
+    staleTime: 300000,
   });
 
   // 2. Fetch specific Availability matrices
@@ -48,6 +49,8 @@ export default function CourtDetailPage() {
     queryKey: ['availability', courtId, selectedDate],
     queryFn: () => availabilityApi.getAvailability(courtId, selectedDate),
     enabled: !!courtId && !!selectedDate,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // Toggle Logic

@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
+import { TtlCacheService } from '../common/cache/ttl-cache.service';
+
+const ANNOUNCEMENTS_CACHE_PREFIX = 'announcements:';
+const ACTIVE_ANNOUNCEMENTS_CACHE_KEY = `${ANNOUNCEMENTS_CACHE_PREFIX}active`;
+const ACTIVE_ANNOUNCEMENTS_TTL_MS = 60_000;
 
 export interface PublicAnnouncementRecord {
   id: string;
@@ -16,15 +21,21 @@ export interface PublicAnnouncementRecord {
 
 @Injectable()
 export class AnnouncementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: TtlCacheService,
+  ) {}
 
   async create(createAnnouncementDto: CreateAnnouncementDto, userId: string) {
-    return this.prisma.announcement.create({
+    const announcement = await this.prisma.announcement.create({
       data: {
         ...createAnnouncementDto,
         createdByUserId: userId,
       },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return announcement;
   }
 
   async findAll() {
@@ -70,47 +81,60 @@ export class AnnouncementsService {
   }
 
   async getActiveAnnouncements() {
-    return this.prisma.announcement.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        message: true,
-        type: true,
-        isActive: true,
-        imageUrls: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: { comments: true },
-        },
-      },
-    });
+    return this.cache.getOrSet(
+      ACTIVE_ANNOUNCEMENTS_CACHE_KEY,
+      ACTIVE_ANNOUNCEMENTS_TTL_MS,
+      () =>
+        this.prisma.announcement.findMany({
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            title: true,
+            message: true,
+            type: true,
+            isActive: true,
+            imageUrls: true,
+            startsAt: true,
+            endsAt: true,
+            createdAt: true,
+            updatedAt: true,
+            _count: {
+              select: { comments: true },
+            },
+          },
+        }),
+    );
   }
 
   async update(id: string, updateAnnouncementDto: UpdateAnnouncementDto) {
     await this.findOne(id); // Ensure it exists
 
-    return this.prisma.announcement.update({
+    const announcement = await this.prisma.announcement.update({
       where: { id },
       data: {
         ...updateAnnouncementDto,
       },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return announcement;
   }
 
   async remove(id: string) {
     await this.findOne(id); // Ensure it exists
-    return this.prisma.announcement.delete({
+    const announcement = await this.prisma.announcement.delete({
       where: { id },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return announcement;
   }
 
   // --- COMMENT LOGIC ---
   async addComment(announcementId: string, userId: string, content: string) {
     await this.findOne(announcementId); // Verify announcement exists
-    return this.prisma.comment.create({
+    const comment = await this.prisma.comment.create({
       data: {
         content,
         announcementId,
@@ -122,6 +146,9 @@ export class AnnouncementsService {
         },
       },
     });
+
+    this.cache.deleteByPrefix(ANNOUNCEMENTS_CACHE_PREFIX);
+    return comment;
   }
 
   async getComments(announcementId: string) {

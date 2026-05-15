@@ -13,7 +13,8 @@ export default function AdminCourtsManager() {
 
   const { data: courts, isLoading } = useQuery({
     queryKey: ['admin-courts'],
-    queryFn: () => courtsApi.getAllCourts()
+    queryFn: () => courtsApi.getAllCourts(),
+    staleTime: 60000,
   });
 
   const createMutation = useMutation({

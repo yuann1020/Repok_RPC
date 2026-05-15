@@ -16,6 +16,7 @@ export default function CourtsPage() {
       status: selectedStatus || undefined,
     }),
     retry: 1,
+    staleTime: 60000,
   });
 
   const courtList = Array.isArray(courts) ? courts : [];

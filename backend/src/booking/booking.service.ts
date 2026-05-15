@@ -41,6 +41,14 @@ export class BookingService {
     const slots = await this.prisma.courtAvailability.findMany({
       where: { id: { in: uniqueSlotIds } },
       orderBy: { startTime: 'asc' },
+      select: {
+        id: true,
+        courtId: true,
+        startTime: true,
+        endTime: true,
+        isAvailable: true,
+        basePrice: true,
+      },
     });
 
     if (slots.length !== uniqueSlotIds.length) {
@@ -144,9 +152,23 @@ export class BookingService {
     return this.prisma.booking.findMany({
       where: { userId },
       orderBy: { bookedAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        bookingReference: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        bookedAt: true,
+        expiresAt: true,
+        expiredAt: true,
         items: {
-          include: { court: { select: { name: true } } },
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            price: true,
+            court: { select: { name: true } },
+          },
         },
       },
     });
@@ -157,9 +179,25 @@ export class BookingService {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        bookingReference: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        bookedAt: true,
+        expiresAt: true,
+        expiredAt: true,
         items: {
-          include: { court: true },
+          select: {
+            id: true,
+            availabilityId: true,
+            startTime: true,
+            endTime: true,
+            price: true,
+            court: { select: { id: true, name: true } },
+          },
         },
       },
     });
@@ -272,7 +310,9 @@ export class BookingService {
           message: 'Insufficient wallet balance',
           walletBalance: Number(wallet.balance),
           requiredCredits: Number(amount),
-          shortfall: Number(shortfall.gt(0) ? shortfall : new Prisma.Decimal(0)),
+          shortfall: Number(
+            shortfall.gt(0) ? shortfall : new Prisma.Decimal(0),
+          ),
         });
       }
 
@@ -320,9 +360,23 @@ export class BookingService {
       return {
         booking: await prisma.booking.findUniqueOrThrow({
           where: { id },
-          include: {
-            items: { include: { court: true } },
-            user: true,
+          select: {
+            id: true,
+            bookingReference: true,
+            status: true,
+            paymentStatus: true,
+            totalAmount: true,
+            confirmationEmailSentAt: true,
+            items: {
+              select: {
+                id: true,
+                startTime: true,
+                endTime: true,
+                price: true,
+                court: { select: { name: true } },
+              },
+            },
+            user: { select: { email: true, fullName: true } },
           },
         }),
         payment,
@@ -346,7 +400,8 @@ export class BookingService {
           customerName: result.booking.user.fullName || 'Customer',
           bookingReference: result.booking.bookingReference,
           courtName: firstItem?.court?.name || 'Pickleball Court',
-          bookingDate: firstItem?.startTime.toISOString().split('T')[0] || 'TBD',
+          bookingDate:
+            firstItem?.startTime.toISOString().split('T')[0] || 'TBD',
           startTime: firstItem?.startTime.toISOString() || 'TBD',
           endTime: lastItem?.endTime.toISOString() || 'TBD',
           totalAmount: Number(result.booking.totalAmount).toFixed(2),
@@ -359,8 +414,12 @@ export class BookingService {
           data: { confirmationEmailSentAt: new Date() },
         });
       } catch (error) {
-        this.logger.error(`Failed to send confirmation email for booking ${result.booking.id}`, error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(
+          `Failed to send confirmation email for booking ${result.booking.id}`,
+          error,
+        );
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
         await this.prisma.booking.update({
           where: { id: result.booking.id },
           data: { confirmationEmailLastError: errorMessage },
@@ -376,7 +435,9 @@ export class BookingService {
     return result.expiredCount > 0;
   }
 
-  async expireUnpaidBookings(scope: { bookingId?: string; userId?: string } = {}) {
+  async expireUnpaidBookings(
+    scope: { bookingId?: string; userId?: string } = {},
+  ) {
     const now = new Date();
     const where: Prisma.BookingWhereInput = {
       status: BookingStatus.PENDING,
@@ -386,59 +447,61 @@ export class BookingService {
       ...(scope.userId ? { userId: scope.userId } : {}),
     };
 
-    const staleBookings = await this.prisma.booking.findMany({
-      where,
-      select: {
-        id: true,
-        items: { select: { availabilityId: true } },
-      },
-    });
-
-    const expiredIds: string[] = [];
-
-    for (const booking of staleBookings) {
-      const didExpire = await this.prisma.$transaction(async (prisma) => {
-        const updated = await prisma.booking.updateMany({
-          where: {
-            id: booking.id,
-            status: BookingStatus.PENDING,
-            expiresAt: { lte: now },
-            paymentStatus: { not: PaymentStatus.PAID },
-          },
-          data: {
-            status: BookingStatus.EXPIRED,
-            paymentStatus: PaymentStatus.EXPIRED,
-            expiredAt: now,
-          },
-        });
-
-        if (updated.count === 0) {
-          return false;
-        }
-
-        await prisma.payment.updateMany({
-          where: {
-            bookingId: booking.id,
-            status: { not: PaymentStatus.PAID },
-          },
-          data: { status: PaymentStatus.EXPIRED },
-        });
-
-        const availabilityIds = booking.items.map((item) => item.availabilityId);
-        if (availabilityIds.length > 0) {
-          await prisma.courtAvailability.updateMany({
-            where: { id: { in: availabilityIds } },
-            data: { isAvailable: true },
-          });
-        }
-
-        return true;
+    const expiredIds = await this.prisma.$transaction(async (prisma) => {
+      const staleBookings = await prisma.booking.findMany({
+        where,
+        select: {
+          id: true,
+          items: { select: { availabilityId: true } },
+        },
       });
 
-      if (didExpire) {
-        expiredIds.push(booking.id);
+      if (staleBookings.length === 0) {
+        return [];
       }
-    }
+
+      const staleIds = staleBookings.map((booking) => booking.id);
+      const updatedBookings = await prisma.booking.updateManyAndReturn({
+        where: {
+          ...where,
+          id: { in: staleIds },
+        },
+        data: {
+          status: BookingStatus.EXPIRED,
+          paymentStatus: PaymentStatus.EXPIRED,
+          expiredAt: now,
+        },
+        select: { id: true },
+      });
+
+      const updatedIds = updatedBookings.map((booking) => booking.id);
+
+      if (updatedIds.length === 0) {
+        return [];
+      }
+
+      await prisma.payment.updateMany({
+        where: {
+          bookingId: { in: updatedIds },
+          status: { not: PaymentStatus.PAID },
+        },
+        data: { status: PaymentStatus.EXPIRED },
+      });
+
+      const updatedIdSet = new Set(updatedIds);
+      const availabilityIds = staleBookings
+        .filter((booking) => updatedIdSet.has(booking.id))
+        .flatMap((booking) => booking.items.map((item) => item.availabilityId));
+
+      if (availabilityIds.length > 0) {
+        await prisma.courtAvailability.updateMany({
+          where: { id: { in: availabilityIds } },
+          data: { isAvailable: true },
+        });
+      }
+
+      return updatedIds;
+    });
 
     return {
       expiredCount: expiredIds.length,

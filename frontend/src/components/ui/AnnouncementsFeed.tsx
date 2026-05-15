@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Announcement, announcementsApi } from '@/lib/api/announcements.api';
 import { useAuthStore } from '@/store/auth-store';
@@ -146,6 +147,7 @@ export function AnnouncementsFeed({ variant }: { variant: Variant }) {
     queryKey: ['active-announcements'],
     queryFn: announcementsApi.getActiveAnnouncements,
     retry: 1,
+    staleTime: 60000,
   });
 
   const announcements = Array.isArray(data) ? data : [];
@@ -194,8 +196,8 @@ export function AnnouncementsFeed({ variant }: { variant: Variant }) {
                   {announcement.imageUrls && announcement.imageUrls.length > 0 && (
                     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {announcement.imageUrls.map((url, i) => (
-                        <div key={i} className="rounded-lg overflow-hidden border border-slate-700/50 aspect-video sm:aspect-square">
-                           <img src={url} alt="" className="w-full h-full object-cover" />
+                        <div key={i} className="relative rounded-lg overflow-hidden border border-slate-700/50 aspect-video sm:aspect-square">
+                           <Image src={url} alt="" fill unoptimized sizes="(min-width: 640px) 33vw, 50vw" className="object-cover" />
                         </div>
                       ))}
                     </div>
@@ -249,7 +251,7 @@ export function AnnouncementsFeed({ variant }: { variant: Variant }) {
                    <div className={`grid gap-1 ${announcement.imageUrls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} bg-slate-900`}>
                      {announcement.imageUrls.slice(0, 4).map((url, i) => (
                        <div key={i} className={`relative overflow-hidden ${announcement.imageUrls.length === 1 ? 'h-64' : 'h-40'}`}>
-                         <img src={url} alt="" className="w-full h-full object-cover opacity-80" />
+                         <Image src={url} alt="" fill unoptimized sizes="(min-width: 768px) 50vw, 100vw" className="object-cover opacity-80" />
                          {i === 3 && announcement.imageUrls.length > 4 && (
                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                              <span className="text-white font-black text-xl">+{announcement.imageUrls.length - 4}</span>

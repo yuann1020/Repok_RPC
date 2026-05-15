@@ -6,7 +6,17 @@ import { useAuthStore } from '@/store/auth-store';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: 1,
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  );
   const hydrate = useAuthStore((s) => s.hydrate);
 
   // Run once on mount — restores user + token from localStorage JWT

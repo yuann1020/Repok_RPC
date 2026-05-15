@@ -47,12 +47,15 @@ export default function AdminAvailabilitiesManager() {
   const { data: courts, isLoading: isCourtsLoading } = useQuery({
     queryKey: ['admin-courts'],
     queryFn: () => courtsApi.getAllCourts(),
+    staleTime: 60000,
   });
 
   const { data: slots, isLoading: isSlotsLoading } = useQuery({
     queryKey: ['admin-availability', selectedCourtId, viewDate],
     queryFn: () => availabilityApi.getAvailability(selectedCourtId, viewDate, { includeUnavailable: true }),
     enabled: !!selectedCourtId && !!viewDate,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const courtList = Array.isArray(courts) ? courts : [];

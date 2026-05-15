@@ -89,6 +89,14 @@ export const adminApi = {
     return response.data;
   },
 
+  getPaymentSummary: async (): Promise<{
+    countsByStatus: Record<string, number>;
+    pendingReviewCount: number;
+  }> => {
+    const response = await apiClient.get('/admin/payments/summary');
+    return response.data;
+  },
+
   getPaymentById: async (id: string) => {
     const response = await apiClient.get(`/admin/payments/${id}`);
     return response.data;

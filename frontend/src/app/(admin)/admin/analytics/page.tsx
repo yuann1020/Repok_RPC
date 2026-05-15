@@ -22,6 +22,7 @@ export default function AdminAnalyticsPage() {
   const { data: summary, isLoading, isError } = useQuery({
     queryKey: ['admin-analytics-summary', filterMonth],
     queryFn: () => adminApi.getAdminAnalyticsSummary({ month: filterMonth }),
+    staleTime: 30000,
   });
 
   const handleQuickFilter = (type: 'THIS_MONTH' | 'LAST_MONTH') => {

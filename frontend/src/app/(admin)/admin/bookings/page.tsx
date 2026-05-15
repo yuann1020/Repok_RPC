@@ -81,6 +81,7 @@ export default function AdminBookingsPage() {
   const { data: courts } = useQuery({
     queryKey: ['admin-courts'],
     queryFn: () => courtsApi.getAllCourts(),
+    staleTime: 60000,
   });
 
   const { data: bookings, isLoading, isError } = useQuery({

@@ -24,15 +24,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [isClient, setIsClient] = useState(false);
 
-  // Poll for pending payments specifically for the notification badge
-  const { data: pendingPayments } = useQuery({
-    queryKey: ['admin-payments-pending'],
-    queryFn: () => adminApi.getAllPayments({ status: 'PENDING_REVIEW' }),
+  // Poll a small summary payload specifically for the notification badge.
+  const { data: paymentSummary } = useQuery({
+    queryKey: ['admin-payments-summary'],
+    queryFn: adminApi.getPaymentSummary,
     enabled: isClient && !!user && user.role === 'ADMIN',
-    refetchInterval: 15000, 
+    refetchInterval: 15000,
+    staleTime: 15000,
   });
   
-  const pendingCount = pendingPayments?.length || 0;
+  const pendingCount = paymentSummary?.pendingReviewCount || 0;
 
   useEffect(() => {
     setIsClient(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Court } from '@/lib/api/courts.api';
 
 export function CourtCard({ court }: { court: Court }) {
@@ -19,13 +20,22 @@ export function CourtCard({ court }: { court: Court }) {
         {/* Visual Header / Image Placeholder */}
         <div className="h-44 sm:h-48 relative overflow-hidden bg-slate-100 dark:bg-slate-800">
           {court.imageUrl ? (
-            <img src={court.imageUrl} alt={court.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+            <Image
+              src={court.imageUrl}
+              alt={court.name}
+              fill
+              unoptimized
+              sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+              className="object-cover transition-transform duration-700 group-hover:scale-110"
+            />
           ) : (
             <div className="w-full h-full relative group">
-              <img 
+              <Image
                 src={court.category === 'CHAMPIONSHIP' ? '/images/courts/championship-fallback.jpg' : '/images/courts/standard-fallback.jpg'} 
                 alt={court.name}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                fill
+                sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                className="object-cover transition-transform duration-700 group-hover:scale-110"
               />
               {/* Subtle glass overlay to maintain the premium feel */}
               <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-900/20 group-hover:bg-transparent transition-colors duration-500" />

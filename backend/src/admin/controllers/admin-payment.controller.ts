@@ -8,7 +8,6 @@ import {
   Body,
 } from '@nestjs/common';
 import { AdminPaymentService } from '../services/admin-payment.service';
-import { PaymentStatus } from '@prisma/client';
 import { FilterPaymentsAdminDto } from '../dto/filter-payments.admin.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -24,6 +23,11 @@ export class AdminPaymentController {
   @Get()
   async getAllPayments(@Query() filterDto: FilterPaymentsAdminDto) {
     return this.adminPaymentService.getAllPayments(filterDto);
+  }
+
+  @Get('summary')
+  async getPaymentSummary() {
+    return this.adminPaymentService.getPaymentSummary();
   }
 
   @Get(':id')
